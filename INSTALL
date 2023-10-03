@@ -33,7 +33,7 @@ To compile the programs 'playhrt', 'bufhrt', 'volrace', 'writeloop',
 
   make
 
-On ARM architecture there are recommended alternative calls which use 
+On ARM v7 architecture there are recommended alternative calls which use 
 some assembler code for refreshing or cleaning memory:
 
   make REFRESH=ARM
@@ -41,6 +41,12 @@ some assembler code for refreshing or cleaning memory:
 
 Use the latter if your CPU supports VFP, check 'Features' 
 with 'less /proc/cpuinfo'. 
+
+On ARM aarch64 (e.g., Raspi 4) use assembler code with:
+  make REFRESH=AA64
+
+On X86 with 64 bits use assembler with:
+  make REFRESH=X8664
 
 Optionally, you may strip the generated binaries:
 
@@ -56,7 +62,7 @@ or with --help.
 
 Example scripts for using these programs are contained in the 'scripts/'
 directory. Explanations can be found on the page:
-  http://frank_l.bitbucket.org/stereoutils/player.html 
+  http://frankl.luebecknet.de/frankl/stereoutils/player.html
 
 For a good performance of 'playhrt' and 'bufhrt' you should use a Linux
 kernel with highres timers enabled. This is the case for most Linux

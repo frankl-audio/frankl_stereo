@@ -39,7 +39,7 @@ tmp/cprefresh_ass.o: src/cprefresh_default.s src/cprefresh_vfp.s src/cprefresh_a
 	elif [ $(REFRESH) = "VFP" ]; then \
 	  $(CC) -c $(CFLAGSNO) -marm -mfpu=neon-vfpv4 -o tmp/cprefresh_ass.o src/cprefresh_vfp.s; \
 	elif [ $(REFRESH) = "AA64" ]; then \
-	  $(CC) -c $(CFLAGSNO) -maa64 -o tmp/cprefresh_ass.o src/cprefresh_aa64.s; \
+	  $(CC) -c $(CFLAGSNO) -march=native -o tmp/cprefresh_ass.o src/cprefresh_aa64.s; \
 	elif [ $(REFRESH) = "X8664" ]; then \
 	  $(CC) -c $(CFLAGSNO) -march=native -o tmp/cprefresh_ass.o src/cprefresh_x8664.s; \
 	fi

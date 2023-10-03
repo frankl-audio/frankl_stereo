@@ -1,0 +1,14 @@
+# Example how to start clreg on each CPU
+# Adjust to your computer and call this as root with
+#    source startclreg86
+
+
+taskset -c 0 ./clreg86 &
+taskset -c 1 ./clreg86 &
+taskset -c 2 ./clreg86 &
+taskset -c 3 ./clreg86 &
+taskset -c 4 ./clreg86 &
+taskset -c 5 ./clreg86 &
+taskset -c 6 ./clreg86 &
+taskset -c 7 ./clreg86 &
+

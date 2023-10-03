@@ -2,6 +2,14 @@
 
 0.7 to 0.8
 
+- added experimental programs to clean CPU registers
+
+- added assembler code for refreshing memory for aarch86 and x86_64
+
+- enabled files > 2G in all input and output
+
+- added some missing short options to playhrt
+
 - added option --precision to resample_soxr.
 
 - added --replay-gain option to resample_soxr and volrace.

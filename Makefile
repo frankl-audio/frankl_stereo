@@ -6,10 +6,10 @@ REFRESH=""
 ARCH=$(shell uname -m)
 
 # normal CFLAGS
-CFLAGS=-O2 -Wall -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$(REFRESH)
+CFLAGS=-O2 -Wall -z execstack -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$(REFRESH)
 
 # CFLAGS without optimization
-CFLAGSNO=-O0 -Wall -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$(REFRESH)
+CFLAGSNO=-O0 -Wall -z execstack -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$(REFRESH)
 
 # targets
 ALL: bin tmp bin/volrace bin/bufhrt bin/highrestest \
@@ -38,6 +38,10 @@ tmp/cprefresh_ass.o: src/cprefresh_default.s src/cprefresh_vfp.s src/cprefresh_a
 	  $(CC) -c $(CFLAGSNO) -marm -o tmp/cprefresh_ass.o src/cprefresh_arm.s; \
 	elif [ $(REFRESH) = "VFP" ]; then \
 	  $(CC) -c $(CFLAGSNO) -marm -mfpu=neon-vfpv4 -o tmp/cprefresh_ass.o src/cprefresh_vfp.s; \
+	elif [ $(REFRESH) = "AA64" ]; then \
+	  $(CC) -c $(CFLAGSNO) -maa64 -o tmp/cprefresh_ass.o src/cprefresh_aa64.s; \
+	elif [ $(REFRESH) = "X8664" ]; then \
+	  $(CC) -c $(CFLAGSNO) -march=native -o tmp/cprefresh_ass.o src/cprefresh_x8664.s; \
 	fi
 
 tmp/cprefresh.o: src/cprefresh.h src/cprefresh.c |tmp 
@@ -77,6 +81,21 @@ resampler: bin/resample_soxr
 
 bin/cat64: src/version.h src/cat64.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/cat64 src/cat64.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
+
+
+
+# not yet officially documented
+bin/clreg86: tmp src/clreg86.c src/cprefresh_x8664.s |bin 
+	$(CC) $(CFLAGSNO) -c -o tmp/cprefresh_x8664.o src/cprefresh_x8664.s
+	$(CC) $(CFLAGSNO) -o bin/clreg86 src/clreg86.c tmp/cprefresh_x8664.o
+
+bin/clreg: tmp src/clreg.c src/cprefresh_x8664.s |bin 
+	$(CC) $(CFLAGSNO) -c -o tmp/cprefresh_aa64.o src/cprefresh_aa64.s
+	$(CC) $(CFLAGSNO) -o bin/clreg src/clreg.c tmp/cprefresh_aa64.o
+
+# undocumented private version, stripped some code
+bin/myplayhrt: src/version.h tmp/net.o src/playhrt.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGSNO) -o bin/myplayhrt src/myplayhrt.c tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o -lasound -lpthread -lrt
 
 clean: 
 	rm -rf src/version.h bin tmp

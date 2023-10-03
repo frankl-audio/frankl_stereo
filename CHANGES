@@ -2,6 +2,8 @@
 
 0.7 to 0.8
 
+- added option -I for 32-bit integer output to resample_soxr
+
 - added experimental programs to clean CPU registers
 
 - added assembler code for refreshing memory for aarch86 and x86_64

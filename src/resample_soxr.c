@@ -115,6 +115,9 @@ void usage( ) {
 "      name of an audio file in shared memory. The default\n"
 "      is input from stdin.\n"
 "\n"
+"  --toint32, -I\n"
+"      output 32-bit integer samples instead of double floats.\n"
+"\n"
 "The follwing three option allow to read only part of the input, but this is\n"
 "only possible for input from file or shared memory.\n"
 "\n"
@@ -273,7 +276,8 @@ int main(int argc, char *argv[])
   /* variables for the resampler */
   double inrate, outrate, phase, bwidth, prec, OLEN;
   double *inp, *out;
-  int verbose, optc, fd;
+  int32_t *iout;
+  int verbose, optc, fd, out32;
   long intotal = 0, outtotal = 0, blen, mlen, check, i, nch;
   soxr_t soxr;
   soxr_error_t error;
@@ -317,6 +321,7 @@ int main(int argc, char *argv[])
       {"until", required_argument, 0, 'u' },
       {"number-frames", required_argument, 0, 'n' },
       {"buffer-length", required_argument, 0, 'b' },
+      {"toint32", no_argument, 0, 'I' },
       {"verbose", no_argument, 0, 'p' },
       {"version", no_argument, 0, 'V' },
       {"help", no_argument, 0, 'h' },
@@ -325,6 +330,7 @@ int main(int argc, char *argv[])
   /* defaults */
   inrate = 44100.0;
   outrate = 192000.0;
+  out32 = 0;
   phase = 25.0; 
   bwidth = 0.0;
   prec = 33.0;
@@ -343,7 +349,7 @@ int main(int argc, char *argv[])
   pnam = NULL;
   verbose = 0;
   while ((optc = getopt_long(argc, argv, 
-          "i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:b:pVh",
+          "i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:b:IpVh",
           longoptions, &optind)) != -1) {
       switch (optc) {
       case 'v':
@@ -411,6 +417,9 @@ int main(int argc, char *argv[])
       case 'F':
         pnam = strdup(optarg);
         getraceparams(pnam, &vol, &delay, &att, 1);
+        break;
+      case 'I':
+        out32 = 1;
         break;
       case 'p':
         verbose = 1;
@@ -503,6 +512,8 @@ int main(int argc, char *argv[])
   inp = (double*) malloc(nch*blen*sizeof(double));
   OLEN = (long)(blen*(outrate/inrate+1.0));
   out = (double*) malloc(nch*OLEN*sizeof(double));
+  if (out32) 
+      iout = (int32_t*) malloc(nch*OLEN*sizeof(int32_t));
   /* create resampler for 64 bit floats and high quality */
   /* the paramters are documented in the soxr.h file, see
           https://sourceforge.net/p/soxr/code/ci/master/tree/src/soxr.h
@@ -601,7 +612,15 @@ int main(int argc, char *argv[])
  
     /* write output */
     refreshmem((char*)out, nch*sizeof(double)*outdone);
-    check = fwrite((void*)out, nch*sizeof(double), outdone, stdout);
+    if (out32) {
+        memclean((char*)iout, nch*sizeof(int32_t)*outdone);
+        for (i=0; i<nch*outdone; i++)
+            iout[i] = (int32_t) (out[i] * 2147483647);
+        refreshmem((char*)iout, nch*sizeof(int32_t)*outdone);
+        check = fwrite((void*)iout, nch*sizeof(int32_t), outdone, stdout);
+    } else {
+        check = fwrite((void*)out, nch*sizeof(double), outdone, stdout);
+    }
     fflush(stdout);
     memclean((char*)out, nch*sizeof(double)*outdone);
     /* this should not happen, the whole block should be written */

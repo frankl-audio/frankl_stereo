@@ -66,10 +66,10 @@ inline void memclean(char* ptr, int n)
 #include <stdint.h>
 /* default version in C, compile with -O0, such that this is not
    optimized away */
-inline void refreshmem(char* ptr, int n)
+inline void refreshmem(char* ptr, long n)
 {
   /* we make shure below that we can access ptr-off */
-  int i, sz, off;
+  long i, sz, off;
   unsigned int x, y, d, *up;
   sz = sizeof(unsigned int);
   off = (uintptr_t)ptr % sz;
@@ -79,11 +79,12 @@ inline void refreshmem(char* ptr, int n)
       y = x ^ d;
       *up = 0x0;
       *up = y ^ d;
+      up++;
   }
 }
-inline void memclean(char* ptr, int n)
+inline void memclean(char* ptr, long n)
 {
-  int i, off, n0, sz;
+  long i, off, n0, sz;
   unsigned int *up;
   sz = sizeof(int);
   off = (uintptr_t)ptr % sz;
@@ -96,11 +97,11 @@ inline void memclean(char* ptr, int n)
       *up = 0xFFFFFFFF;
       *up = 0;
       *up = 0;
+      up++;
   }
   n0 *= sz;
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
-
 
 #endif
 #endif

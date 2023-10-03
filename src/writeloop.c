@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
 
        tmpnames[i-optind] = (char*)malloc(strlen(argv[i])+5);
        strncpy(tmpnames[i-optind], fnames[i-optind], strlen(argv[i]));
-       strncat(tmpnames[i-optind], ".TMP", 4);
+       strncat(tmpnames[i-optind], ".TMP", 5);
        if (shared) {
            /* open semaphore with TMP name for write lock */
            if ((semsw[i-optind] = sem_open(tmpnames[i-optind], semflag,

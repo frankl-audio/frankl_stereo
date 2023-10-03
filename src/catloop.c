@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
            /* also semaphore for write lock */
            tmpnames[i-optind] = (char*)malloc(strlen(argv[i])+5);
            strncpy(tmpnames[i-optind], fnames[i-optind], strlen(argv[i]));
-           strncat(tmpnames[i-optind], ".TMP", 4);
+           strncat(tmpnames[i-optind], ".TMP", 5);
            if ((semsw[i-optind] = sem_open(tmpnames[i-optind], O_RDWR))
                                                          == SEM_FAILED) {
                fprintf(stderr, "catloop: Cannot open write semaphore: %s\n", strerror(errno));

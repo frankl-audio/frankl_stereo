@@ -2,6 +2,8 @@
 
 0.7 to 0.8
 
+- now using resample_soxr in example script with upsampling
+
 - added option -I for 32-bit integer output to resample_soxr
 
 - added experimental programs to clean CPU registers

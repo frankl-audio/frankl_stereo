@@ -10,10 +10,12 @@
 CARD="hw:0,0"
 EXTRABYTESPLAY=0
 SAMPLERATE=192000
+# configure brutefir with output format needed by your DAC
+# (here we assume S32_LE)
 BRUTEFIRCONFIG=<your brutefir config file>
 VERBOSE="--verbose --verbose"
 
-# find input sample rate
+# find input sample rate - only needed when resample_soxr is not used below
 ORIGRATE=`sox --i "$1" | grep "Sample Rate" | cut -d: -f2 | sed -e "s/ //g"`
 
 trap "trap - SIGTERM && kill -- -$$ " SIGINT SIGTERM EXIT
@@ -26,17 +28,26 @@ if ! test -e /tmp/VOLRACE ; then
   echo "0.6 4 0.75" > /tmp/VOLRACE
 fi
 
-shmcat --shmname=/play.flac | \
-      sox -t flac - -t raw -r ${ORIGRATE} -c 2 -e float -b 64 - | \
-      sox -t raw -r ${ORIGRATE} -c 2 -e float -b 64 - \
-          -t raw - vol 0.8 rate -v -I ${SAMPLERATE} | \
-      volrace --param-file=/tmp/VOLRACE | \
+# old version, without resample_soxr
+#shmcat --shmname=/play.flac | \
+#      sox -t flac - -t raw -r ${ORIGRATE} -c 2 -e float -b 64 - | \
+#      sox -t raw -r ${ORIGRATE} -c 2 -e float -b 64 - \
+#          -t raw - vol 0.8 rate -v -I ${SAMPLERATE} | \
+#      volrace --param-file=/tmp/VOLRACE | \
+#      brutefir ${BRUTEFIRCONFIG} -quiet | \
+#      writeloop --block-size=1024 --file-size=4096 --shared /bl1 /bl2 /bl3 &
+
+resample_soxr --shmname=/play.flac --param-file=/cache/VOLRACE \
+           --outrate=${SAMPLERATE}  --fading-length=100000  | \
       brutefir ${BRUTEFIRCONFIG} -quiet | \
       writeloop --block-size=1024 --file-size=4096 --shared /bl1 /bl2 /bl3 &
 
 # allow some startup time for background command
 sleep 0.5
 
+# if this is started from an environment that uses the pulseaudio
+# sound server, you can substitute 'playhrt' below by 
+# 'pasuspender -- playhrt'
 catloop --block-size=1024 --shared /bl1 /bl2 /bl3 | \
       playhrt \
            --stdin \

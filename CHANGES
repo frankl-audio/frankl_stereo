@@ -2,17 +2,18 @@
 
 0.7 to 0.8
 
-- now using resample_soxr in example script with upsampling
+- now using resample_soxr in example script with upsampling.
 
-- added option -I for 32-bit integer output to resample_soxr
+- added option -I for 32-bit integer output to resample_soxr.
 
-- added experimental programs to clean CPU registers
+- added experimental programs clreg/clref86 to clean CPU registers,
+  see INSTALL file.
 
-- added assembler code for refreshing memory for aarch86 and x86_64
+- added assembler code for refreshing memory for aarch86 and x86_64.
 
-- enabled files > 2G in all input and output
+- enabled files > 2G in all input and output.
 
-- added some missing short options to playhrt
+- added some missing short options to playhrt.
 
 - added option --precision to resample_soxr.
 

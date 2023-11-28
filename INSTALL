@@ -22,7 +22,7 @@ For 'cat64' the 'sndfile' library is needed.
 )
 
 To get the newest version of the code use (assuming you have installed 'git'):
-     git clone https://bitbucket.org/frank_l/frankl_stereo/
+     git clone https://github.com/frankl-audio/frankl_stereo.git
      cd frankl_stereo/
 If you have done this before, update to newest version inside that directory:
      git pull
@@ -31,7 +31,11 @@ If you have done this before, update to newest version inside that directory:
 To compile the programs 'playhrt', 'bufhrt', 'volrace', 'writeloop',
 'catloop', 'cptoshm', 'shmcat', 'cat64', 'resample_soxr' and 'highrestest' say:
 
-  make
+On ARM aarch64 (e.g., Raspi 4) use assembler code with:
+  make REFRESH=AA64
+
+On X86 with 64 bits use assembler with:
+  make REFRESH=X8664
 
 On ARM v7 architecture there are recommended alternative calls which use 
 some assembler code for refreshing or cleaning memory:
@@ -42,11 +46,8 @@ some assembler code for refreshing or cleaning memory:
 Use the latter if your CPU supports VFP, check 'Features' 
 with 'less /proc/cpuinfo'. 
 
-On ARM aarch64 (e.g., Raspi 4) use assembler code with:
-  make REFRESH=AA64
-
-On X86 with 64 bits use assembler with:
-  make REFRESH=X8664
+Otherwise, you get a generic version by just
+   make
 
 Optionally, you may strip the generated binaries:
 
@@ -70,6 +71,32 @@ distributions, you can check it by running the utility 'bin/highrestest'.
 
 Have fun!
 
+
+
+Experimental code for "cleaning" CPU registers
+----------------------------------------------
+
+This code was inspired by a Windows program that seems popular among some
+audiophiles: MinorityClean
+(Use a web search for infos, there seem to be hundreds of variants, many
+names for the program, and no fixed site for infos and downloads.)
+
+To compile the program "clreg86" (for x86_64 systems), or "clreg" (for
+aarch64, like Raspberry Pi 4), type one of:
+    make bin/clreg86  
+    make bin/clreg
+
+Usage is easy, see 'scripts/startclreg86' for an example how to start one
+instance of the program per CPU core. The programs need very little CPU time
+(3 seconds per day or so).
+
+This program writes every second certain series of bit patterns into all CPU
+registers. If you are curious, try out whether the program has any effect 
+on the sound or display of your computer.
+
+
+
+##############################################################################
 ##  We keep here for a while some old hints for compiling earlier versions
 ##  of these programs. This can still be done but is no longer needed, instead 
 ##  we recommend for version 0.7 and later of this package to use playhrt 

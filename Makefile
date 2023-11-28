@@ -84,12 +84,12 @@ bin/cat64: src/version.h src/cat64.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 
 
 
-# not yet officially documented
+# experimental, only compiled on demand
 bin/clreg86: tmp src/clreg86.c src/cprefresh_x8664.s |bin 
 	$(CC) $(CFLAGSNO) -c -o tmp/cprefresh_x8664.o src/cprefresh_x8664.s
 	$(CC) $(CFLAGSNO) -o bin/clreg86 src/clreg86.c tmp/cprefresh_x8664.o
 
-bin/clreg: tmp src/clreg.c src/cprefresh_x8664.s |bin 
+bin/clreg: tmp src/clreg.c src/cprefresh_aa64.s |bin 
 	$(CC) $(CFLAGSNO) -c -o tmp/cprefresh_aa64.o src/cprefresh_aa64.s
 	$(CC) $(CFLAGSNO) -o bin/clreg src/clreg.c tmp/cprefresh_aa64.o
 

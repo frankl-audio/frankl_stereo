@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
     long long icount, ocount;
     void *buf, *iptr, *optr, *max;
     char *port, *inhost, *inport, *outfile, *infile;
-    struct timespec mtime;
+    struct timespec mtime, mtime1;
     double looperr, extraerr, extrabps, off;
     /* variables for shared memory input */
     char **fname, *fnames[100], **tmpname, *tmpnames[100], **mem, *mems[100],
@@ -666,6 +666,7 @@ int main(int argc, char *argv[])
           optr = buf;
           wnext = (iptr - optr <= olen) ? (iptr - optr) : olen;
           clock_gettime(CLOCK_MONOTONIC, &mtime);
+          clock_gettime(CLOCK_MONOTONIC, &mtime1);
           for (lcount=0, off=looperr; optr < iptr; lcount++, off+=looperr) {
               /* once cache is filled and other side is reading we reset time */
               if (lcount == 50) clock_gettime(CLOCK_MONOTONIC, &mtime);
@@ -677,6 +678,20 @@ int main(int argc, char *argv[])
               refreshmem((char*)optr, wnext);
               refreshmem((char*)optr, wnext);
               refreshmem((char*)optr, wnext);
+              clock_gettime(CLOCK_MONOTONIC, &mtime1);
+              if ((mtime1.tv_sec > mtime.tv_sec)
+                  || (mtime1.tv_sec == mtime.tv_sec
+                      && mtime1.tv_nsec > mtime.tv_nsec)) {
+                 if (verbose)
+                      fprintf(stderr, "bufhrt: delayed block %ld\n", lcount);
+                 /* reset to current time + 0.3 sec */
+                 clock_gettime(CLOCK_MONOTONIC, &mtime);
+                 mtime.tv_nsec += (300000000);
+                 if (mtime.tv_nsec > 999999999) {
+                   mtime.tv_nsec -= 1000000000;
+                   mtime.tv_sec++;
+                 }
+              }
               while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
                                                                  &mtime, NULL)
                      != 0) ;

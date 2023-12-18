@@ -15,6 +15,30 @@ if test -e "$2" ; then
   exit
 fi
 
+
+##  This utility is mainly meant for music files (and maybe certain filter and
+##  program files for music playback).
+##  
+##  For testing you may add the '--verbose' option. If there are more 
+##  than a few dozen "bufhrt: delayed block xxxx" messages on an album
+##  then reduce the value of the '--loops-per-second' parameter.
+##  
+##  You may also experiment with the '--bytes-per-second' value. Larger values
+##  make the process faster. Lower values may lead to even better audible
+##  results. But this needs to be tested in the individual setups.
+##  
+##  If you have enough RAM you may enlarge the value of the
+##  '--buffer-size' argument to something larger than the size
+##  of the biggest files you want to improve.
+
 bufhrt --file="$1" --dsync --outfile="$2" --buffer-size=50000000 \
-       --loops-per-second=2000 --bytes-per-second=6144000 --interval 
+       --loops-per-second=100 --bytes-per-second=3276800 --interval 
+
+
+
+
+
+# setting in version 0.8, often probably too many loops
+#bufhrt --file="$1" --dsync --outfile="$2" --buffer-size=50000000 \
+#       --loops-per-second=2000 --bytes-per-second=6144000 --interval 
 

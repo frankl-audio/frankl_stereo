@@ -205,7 +205,7 @@ int main(int argc, char *argv[])
     void *buf, *iptr, *optr, *max;
     char *port, *inhost, *inport, *outfile, *infile;
     struct timespec mtime, mtime1;
-    double looperr, extraerr, extrabps, off;
+    double looperr, extraerr, extrabps, off, dsyncpersec;
     /* variables for shared memory input */
     char **fname, *fnames[100], **tmpname, *tmpnames[100], **mem, *mems[100],
          *ptr;
@@ -223,6 +223,7 @@ int main(int argc, char *argv[])
         {"input-size",  required_argument, 0, 'i'},
         {"loops-per-second", required_argument, 0,  'n' },
         {"bytes-per-second", required_argument, 0,  'm' },
+        {"dsyncs-per-second", required_argument, 0,  'D' },
         {"sample-rate", required_argument, 0,  's' },
         {"sample-format", required_argument, 0, 'f' },
         {"dsync", no_argument, 0, 'd' },
@@ -249,6 +250,7 @@ int main(int argc, char *argv[])
     /* defaults */
     port = NULL;
     dsync = 0;
+    dsyncpersec = 0;
     outfile = NULL;
     blen = 65536;
     /* default input is stdin */
@@ -269,7 +271,7 @@ int main(int argc, char *argv[])
     innetbufsize = 0;
     outnetbufsize = 0;
     verbose = 0;
-    while ((optc = getopt_long(argc, argv, "p:o:b:i:n:m:s:f:F:H:P:e:vVh",
+    while ((optc = getopt_long(argc, argv, "p:o:b:i:D:n:m:s:f:F:H:P:e:vVhd",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'p':
@@ -280,15 +282,6 @@ int main(int argc, char *argv[])
           break;
         case 'o':
           outfile = optarg;
-          if (dsync) 
-              connfd = open(outfile, O_WRONLY | O_CREAT | O_DSYNC, 00644);
-          else
-              connfd = open(outfile, O_WRONLY | O_CREAT, 00644);
-          if (connfd == -1) {
-              fprintf(stderr, "bufhrt: Cannot open output file %s.\n   %s\n",
-                               outfile, strerror(errno));
-              exit(3);
-          }
           break;
         case 'b':
           blen = atoi(optarg);
@@ -321,10 +314,6 @@ int main(int argc, char *argv[])
           break;
         case 'F':
           infile = optarg;
-          if ((ifd = open(infile, O_RDONLY)) == -1) {
-              fprintf(stderr, "bufhrt: Cannot open input file %s.\n", infile);
-              exit(2);
-          }
           break;
         case 'H':
           inhost = optarg;
@@ -341,6 +330,8 @@ int main(int argc, char *argv[])
         case 'e':
           extrabps = atof(optarg);
           break;
+        case 'D':
+          dsyncpersec = atof(optarg);
         case 'K':
           innetbufsize = atoi(optarg);
           if (innetbufsize != 0 && innetbufsize < 128)
@@ -369,7 +360,26 @@ int main(int argc, char *argv[])
           exit(3);
         }
     }
-    /* check some arguments and set some parameters */
+    /* check some arguments, open files and set some parameters */
+    if (outfile) {
+        if (dsync) 
+            connfd = open(outfile, O_WRONLY | O_CREAT | O_DSYNC, 00644);
+        else
+            connfd = open(outfile, O_WRONLY | O_CREAT, 00644);
+        if (connfd == -1) {
+            fprintf(stderr, "bufhrt: Cannot open output file %s.\n   %s\n",
+                             outfile, strerror(errno));
+            exit(3);
+        }
+    }
+    if (infile) {
+        if ((ifd = open(infile, O_RDONLY)) == -1) {
+            fprintf(stderr, "bufhrt: Cannot open input file %s.\n", infile);
+            exit(2);
+        }
+    }
+    /* ignore in case of --dsync */
+    if (dsync) dsyncpersec = 0;
     if (outpersec == 0) {
        if (rate != 0 && bytesperframe != 0) {
            outpersec = rate * bytesperframe;

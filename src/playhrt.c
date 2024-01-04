@@ -391,6 +391,9 @@ int main(int argc, char *argv[])
           } else if (strcmp(optarg, "S32_LE")==0) {
              format = SND_PCM_FORMAT_S32_LE;
              bytespersample = 4;
+          } else if (strcmp(optarg, "DSD_U32_BE")==0) {
+             format = SND_PCM_FORMAT_DSD_U32_BE;
+             bytespersample = 4;
           } else {
              fprintf(stderr, "playhrt: Sample format %s not recognized.\n", optarg);
              exit(1);

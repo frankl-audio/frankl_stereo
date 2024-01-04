@@ -2,6 +2,10 @@
 
 0.8 to 0.9
 
+- highrestest with optional integer parameter does a 10 second
+  with 10000 sleeps for statistics about actual presision
+  (try 'highrestest 500')
+
 - new program cleancp that can be used instead of improvefile
 
 - new option --dsyncs-per-second for bufhrt, used in improvefile

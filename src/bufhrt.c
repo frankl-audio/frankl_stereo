@@ -1,5 +1,5 @@
 /*
-bufhrt.c                Copyright frankl 2013-2015
+bufhrt.c                Copyright frankl 2013-2024
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
@@ -7,6 +7,7 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 */
 
 
+#define _GNU_SOURCE
 #include "version.h"
 #include "net.h"
 #include <getopt.h>
@@ -134,9 +135,13 @@ void usage( ) {
 "      the buffer content is written out in a sleep-write loop (without\n"
 "      reading input). See below for an example.\n"
 "\n"
+"  --dsyncs-per-second=intval, -D intval\n"
+"      in interval mode data of output file will be transfered to storage\n"
+"      hardware with this frequency. Sensible values depend on hardware, can\n"
+"      be between 1 and 200.\n"
+"\n"
 "  --dsync, -d\n"
-"      output file will be opened with O_DSYNC option, this is a hint to\n"
-"      the system to write data to the hardware immediately.\n"
+"      abbreviation to set --dsyncs-per-second to same as --loops-per-second.\n"
 "\n"
 "  --in-net-buffer-size=intval, -K intval\n"
 "  --out-net-buffer-size=intval, -L intval\n"
@@ -175,9 +180,9 @@ void usage( ) {
 "  We use interval mode to copy music files to a hard disk. (Yes, different\n"
 "  copies of a music file on the same disk can sound differently . . .):\n"
 "\n"
-"  bufhrt --interval --file music.flac --dsync --outfile=music_better.flac \\\n"
-"         --buffer-size=500000000 --loops-per-second=2000 \\\n"
-"         --bytes-per-second=6144000\n"
+"  bufhrt --interval --file music.flac --outfile=music_better.flac \\\n"
+"         --buffer-size=536870912 --loops-per-second=2000 \\\n"
+"         --bytes-per-second=8192000 --dsyncs-per-second=100\n"
 "\n"
 "  And here is an example how 'bufhrt' can work together with 'writeloop'\n"
 "  (note that the memory file size is 6 * 1536, 6 times the data to be\n"
@@ -200,7 +205,8 @@ int main(int argc, char *argv[])
         bytesperframe, optc, interval, shared, innetbufsize,
         outnetbufsize, dsync;
     long blen, hlen, ilen, olen, outpersec, loopspersec, nsec, count, wnext,
-         badreads, badreadbytes, badwrites, badwritebytes, lcount;
+         badreads, badreadbytes, badwrites, badwritebytes, lcount, 
+         dcount, dsyncfreq;
     long long icount, ocount;
     void *buf, *iptr, *optr, *max;
     char *port, *inhost, *inport, *outfile, *infile;
@@ -362,10 +368,7 @@ int main(int argc, char *argv[])
     }
     /* check some arguments, open files and set some parameters */
     if (outfile) {
-        if (dsync) 
-            connfd = open(outfile, O_WRONLY | O_CREAT | O_DSYNC, 00644);
-        else
-            connfd = open(outfile, O_WRONLY | O_CREAT, 00644);
+        connfd = open(outfile, O_WRONLY | O_CREAT, 00644);
         if (connfd == -1) {
             fprintf(stderr, "bufhrt: Cannot open output file %s.\n   %s\n",
                              outfile, strerror(errno));
@@ -374,12 +377,14 @@ int main(int argc, char *argv[])
     }
     if (infile) {
         if ((ifd = open(infile, O_RDONLY)) == -1) {
-            fprintf(stderr, "bufhrt: Cannot open input file %s.\n", infile);
+            fprintf(stderr, "bufhrt: Cannot open input file %s: %s.\n", 
+                            infile, strerror(errno));
             exit(2);
         }
     }
-    /* ignore in case of --dsync */
-    if (dsync) dsyncpersec = 0;
+    /* translate --dsync */
+    if (dsync) dsyncfreq = 1;
+    if (dsyncpersec) dsyncfreq = (long) (loopspersec/dsyncpersec);
     if (outpersec == 0) {
        if (rate != 0 && bytesperframe != 0) {
            outpersec = rate * bytesperframe;
@@ -421,6 +426,8 @@ int main(int argc, char *argv[])
        else
           fprintf(stderr, "file %s", infile);
        fprintf(stderr, ", output in %ld loops per second.\n", loopspersec);
+       if (dsyncfreq)
+          fprintf(stderr, "Data sync'ed every %ld loops.\n", dsyncfreq);
     }
 
     extraerr = 1.0*outpersec/(outpersec+extrabps);
@@ -654,6 +661,8 @@ int main(int argc, char *argv[])
     /* interval mode */
     if (interval) {
        count = 0;
+       /* counter for fdatasync */
+       dcount = 0;
        while (moreinput) {
           count++;
           /* fill buffer */
@@ -675,8 +684,8 @@ int main(int argc, char *argv[])
           /* write out */
           optr = buf;
           wnext = (iptr - optr <= olen) ? (iptr - optr) : olen;
-          clock_gettime(CLOCK_MONOTONIC, &mtime);
           clock_gettime(CLOCK_MONOTONIC, &mtime1);
+          clock_gettime(CLOCK_MONOTONIC, &mtime);
           for (lcount=0, off=looperr; optr < iptr; lcount++, off+=looperr) {
               /* once cache is filled and other side is reading we reset time */
               if (lcount == 50) clock_gettime(CLOCK_MONOTONIC, &mtime);
@@ -711,6 +720,15 @@ int main(int argc, char *argv[])
                   fprintf(stderr, "bufhrt: Write error.\n");
                   exit(15);
               }
+              if (dsyncfreq) {
+                  dcount++;
+                  if (dcount == dsyncfreq) {
+                     fdatasync(connfd);
+                     dcount = 0;
+                     /* duration of sync depends on hardware, reset timer */
+                     clock_gettime(CLOCK_MONOTONIC, &mtime);
+                  }
+              }
               ocount += s;
               optr += s;
               wnext = olen + wnext - s;
@@ -728,8 +746,11 @@ int main(int argc, char *argv[])
                   wnext = s;
               }
           }
+          fdatasync(connfd);
        }
 
+       if (outfile)
+           posix_fadvise(connfd, 0, 0, POSIX_FADV_DONTNEED);
        close(connfd);
        shutdown(listenfd, SHUT_RDWR);
        close(listenfd);

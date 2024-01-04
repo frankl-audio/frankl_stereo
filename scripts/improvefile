@@ -18,7 +18,15 @@ fi
 
 ##  This utility is mainly meant for music files (and maybe certain filter and
 ##  program files for music playback).
-##  
+
+## Hint: you may also use the new program 'cleancp' instead of this script
+
+bufhrt --file="$1" --outfile="$2" --buffer-size=536870912 \
+       --loops-per-second=2000 --bytes-per-second=8192000 \
+       --dsyncs-per-second=100 --interval 
+
+
+# older variant with --dsync 
 ##  For testing you may add the '--verbose' option. If there are more 
 ##  than a few dozen "bufhrt: delayed block xxxx" messages on an album
 ##  then reduce the value of the '--loops-per-second' parameter.
@@ -31,12 +39,8 @@ fi
 ##  '--buffer-size' argument to something larger than the size
 ##  of the biggest files you want to improve.
 
-bufhrt --file="$1" --dsync --outfile="$2" --buffer-size=50000000 \
-       --loops-per-second=100 --bytes-per-second=3276800 --interval 
-
-
-
-
+#bufhrt --file="$1" --dsync --outfile="$2" --buffer-size=50000000 \
+#       --loops-per-second=100 --bytes-per-second=3276800 --interval 
 
 # setting in version 0.8, often probably too many loops
 #bufhrt --file="$1" --dsync --outfile="$2" --buffer-size=50000000 \

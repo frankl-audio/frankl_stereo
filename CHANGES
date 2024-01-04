@@ -1,5 +1,9 @@
         Changes between published versions
 
+0.8 to 0.9
+
+- new option --dsyncs-per-second for bufhrt, used in improvefile
+
 0.7 to 0.8
 
 - now using resample_soxr in example script with upsampling.

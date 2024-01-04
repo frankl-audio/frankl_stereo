@@ -2,6 +2,8 @@
 
 0.8 to 0.9
 
+- new program cleancp that can be used instead of improvefile
+
 - new option --dsyncs-per-second for bufhrt, used in improvefile
 
 0.7 to 0.8

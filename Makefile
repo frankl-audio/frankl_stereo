@@ -14,7 +14,7 @@ CFLAGSNO=-O0 -Wall -z execstack -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$
 # targets
 ALL: bin tmp bin/volrace bin/bufhrt bin/highrestest \
      bin/writeloop bin/catloop bin/playhrt bin/cptoshm bin/shmcat \
-     bin/resample_soxr bin/cat64
+     bin/resample_soxr bin/cat64 bin/cleancp
 
 bin:
 	mkdir -p bin
@@ -58,6 +58,9 @@ bin/playhrt_static: src/version.h tmp/net.o src/playhrt.c tmp/cprefresh.o tmp/cp
 
 bin/bufhrt: src/version.h tmp/net.o src/bufhrt.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/bufhrt tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/bufhrt.c -lpthread -lrt
+
+bin/cleancp: src/version.h tmp/net.o src/cleancp.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGSNO) -o bin/cleancp tmp/cprefresh.o tmp/cprefresh_ass.o src/cleancp.c -lpthread -lrt
 
 bin/highrestest: src/highrestest.c |bin
 	$(CC) $(CFLAGSNO) -o bin/highrestest src/highrestest.c -lrt

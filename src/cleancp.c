@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
 
     if ((argc < 3) || (argc > 5)) {
         fprintf(stderr, "%s infile outfile [pagespersecond, syncfrequency]\n", argv[0]);
-        fprintf(stderr, "   'pagespersecond': 100..5000 (default 2000),\n");
+        fprintf(stderr, "   'pagespersecond': 1..5000 (default 2000),\n");
         fprintf(stderr, "   'syncfrequency': 0..20 (default 5) output sync'ed every 2^syncfreq pages.\n");
         exit(EXIT_FAILURE);
     }
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     /* optional arguments */
     if (argc > 3) {
         n = atoi(argv[3]);
-        if (n < 100 || n > 5000) n = 2000;
+        if (n < 1 || n > 5000) n = 2000;
         nsec = 1000000000/n;
     } else {
         nsec = 500000;

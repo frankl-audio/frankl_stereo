@@ -28,21 +28,18 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 
 int main(int argc, char *argv[]) {
     int             fdin, fdout;
-    int             syncfreq;
-    long            psize, fsize, lsize, npages, nsec, i, n;
+    int             syncfreq, npages;
+    long            psize, bsize, fsize, lsize, nloops, nsec, i, n;
     long            *ptrin, *ptrout, *ip, *op;
-    char            *addrin, *addrout, *buf, area[16384];
+    char            *addrin, *addrout, *buf, area[65536], *ptmp;
     struct stat     sb;
     struct timespec mtime, checktime;
 
-    psize = sysconf(_SC_PAGE_SIZE);
-    lsize = psize / sizeof(long);
-    for (buf = area; (long)buf % psize != 0; buf++);
-
-    if ((argc < 3) || (argc > 5)) {
-        fprintf(stderr, "%s infile outfile [pagespersecond, syncfrequency]\n", argv[0]);
-        fprintf(stderr, "   'pagespersecond': 1..5000 (default 2000),\n");
-        fprintf(stderr, "   'syncfrequency': 0..20 (default 5) output sync'ed every 2^syncfreq pages.\n");
+    if ((argc < 3) || (argc > 6)) {
+        fprintf(stderr, "%s infile outfile [pagespersecond  syncfrequency  npages]\n", argv[0]);
+        fprintf(stderr, "   'loopspersecond': 1..5000 (default 2000),\n");
+        fprintf(stderr, "   'syncfrequency': 0..20 (default 5) output sync'ed every 2^syncfreq loops,\n");
+        fprintf(stderr, "   'npages': 1..512 (default 1) number of pages per loop.\n");
         exit(EXIT_FAILURE);
     }
 
@@ -61,19 +58,45 @@ int main(int argc, char *argv[]) {
     } else {
         syncfreq = 32;
     }
+    if (argc > 5) {
+        npages = atoi(argv[5]);
+        if (npages < 1 || npages > 512) npages = 1;
+    } else {
+        npages = 1;
+    }
 
-    fdin = open(argv[1], O_RDONLY);
+
+    fdin = open(argv[1], O_RDONLY|O_NOATIME);
     if (fdin == -1)
         handle_error("open input file");
 
     if (fstat(fdin, &sb) == -1)           /* To obtain file size */
         handle_error("fstat");
+    
+    /* determine all parameters 
+         psize: size of pages
+         bsize: npages * psize
+         lsize: long ints in blocks of length npages*psize 
+         buf:   buffer aligned to page size
+         fsize: size of input and output file 
+         nloops:number of loops
+    */
+    psize = sysconf(_SC_PAGE_SIZE);
+    bsize = npages * psize;
+    lsize = bsize / sizeof(long);
+    if (npages < 16)
+        for (buf = area; (long)buf % psize != 0; buf++);
+    else {
+        ptmp = (char *)malloc(bsize+psize);
+        for (buf = ptmp; (long)buf % psize != 0; buf++);
+    }
+
     fsize = sb.st_size;
-    npages = fsize / psize;
+    nloops = fsize / bsize;
 
     /* remove output file if it exists */
     if (access(argv[2], F_OK)) remove(argv[2]);
-    fdout = open(argv[2], O_RDWR|O_CREAT, 00644);
+    fdout = open(argv[2], O_RDWR|O_CREAT|O_NOATIME, 00644);
     if (fdout == -1)
         handle_error("open output file");
 
@@ -96,11 +119,11 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &mtime);
     clock_gettime(CLOCK_MONOTONIC, &checktime);
     for(n=0, ptrin = (long*)addrin, ptrout = (long*)addrout; 
-             n<npages; 
+             n<nloops; 
              ptrin+=lsize, ptrout+=lsize, n++) {
          /* sync output every syncfreq pages, reset timer */
          if (n > 0 && n % syncfreq == 0) {
-             msync(addrout+(n-syncfreq)*psize, syncfreq*psize, MS_SYNC);
+             msync(addrout+(n-syncfreq)*bsize, syncfreq*bsize, MS_SYNC);
              clock_gettime(CLOCK_MONOTONIC, &mtime);
          }
          /* increase time to wake up */
@@ -109,12 +132,12 @@ int main(int argc, char *argv[]) {
            mtime.tv_nsec -= 1000000000;
            mtime.tv_sec++;
          }
-         /* refresh data to write next, page should fit into L1 cache */
-         memclean(buf, psize);         
+         /* refresh data to write next, npages pages should fit into L1 cache */
+         memclean(buf, bsize);         
          cpblk(ptrin, (long*)buf);
-         refreshmem(buf, psize);
-         refreshmem(buf, psize);
-         refreshmem(buf, psize);
+         refreshmem(buf, bsize);
+         refreshmem(buf, bsize);
+         refreshmem(buf, bsize);
          /* temporary (only seem messages with more than 4000 pages/sec
          clock_gettime(CLOCK_MONOTONIC, &checktime);
          if ((checktime.tv_sec > mtime.tv_sec)
@@ -136,7 +159,7 @@ int main(int argc, char *argv[]) {
     }
          
     /* handle partial page at the end */
-    n = npages*psize;
+    n = nloops*bsize;
     if (n < fsize) {
         memcpy(buf, addrin+n, fsize - n);
         refreshmem(buf, fsize - n);

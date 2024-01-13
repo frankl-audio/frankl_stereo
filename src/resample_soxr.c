@@ -7,7 +7,7 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 Compile with
     gcc -o resample_soxr -O2 resample_soxr.c -lsoxr -lsndfile -lrt
 */
-
+#define _GNU_SOURCE
 #include "version.h"
 #include <stdlib.h>
 #include <unistd.h>
@@ -289,9 +289,8 @@ int main(int argc, char *argv[])
   soxr_error_t error;
   size_t indone, outdone;
   /* variables for optional input from sound file/shared memory */ 
-  char *fnam, *memname, *mem;
+  char *fnam, *memname;
   struct stat sb;
-  size_t length;
   sf_count_t start, until, total;
   SNDFILE *sndfile=NULL;
   SF_INFO sfinfo;
@@ -404,7 +403,7 @@ int main(int argc, char *argv[])
         break;
       case 'b':
         blen = atoi(optarg);
-        if (blen < 1024)
+        if (blen < 256)
             blen = 8192;
         break;
       case 'f':
@@ -462,7 +461,8 @@ int main(int argc, char *argv[])
           fprintf(stderr, "resample_soxr: opening file %s.\n", fnam);
           fflush(stderr);
       }
-      sndfile = sf_open(fnam, SFM_READ, &sfinfo);
+      fd = open(fnam, O_RDONLY | O_NOATIME);
+      sndfile = sf_open_fd(fd, SFM_READ, &sfinfo, 1);
       if (sndfile == NULL) {
           fprintf(stderr, "resample_soxr: cannot open file %s.\n", fnam);
           exit(2);
@@ -479,12 +479,6 @@ int main(int argc, char *argv[])
       if (fstat(fd, &sb) == -1) {
 	  fprintf(stderr, "resample_soxr: Cannot stat shared memory %s.\n", memname);
 	  exit(4);
-      }
-      length = sb.st_size;
-      mem = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-      if (mem == MAP_FAILED) {
-	  fprintf(stderr, "resample_soxr: Cannot map shared memory.\n");
-	  exit(6);
       }
       sndfile = sf_open_fd(fd, SFM_READ, &sfinfo, 1);
       if (sndfile == NULL) {
@@ -675,6 +669,7 @@ int main(int argc, char *argv[])
   }
   soxr_delete(soxr);
   free(out);
+  sf_close(sndfile);
   if (verbose) {
     fprintf(stderr, "resample_soxr: %ld input and %ld output samples\n", 
             (long)intotal, (long)outtotal);

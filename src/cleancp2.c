@@ -1,5 +1,5 @@
 /*
-cleancp.c                Copyright frankl 2024
+cleancp2.c                Copyright frankl 2024
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
@@ -23,19 +23,15 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
-#define cpblk(ptrin, ptrout) \
-    for(i=0, ip=(ptrin), op=(ptrout); i < lsize; *op=*ip, ip++, op++, i++);
-
 int main(int argc, char *argv[]) {
     int             fdin, fdout;
-    int             syncfreq, npages, nrrefreshs;
-    long            psize, bsize, fsize, lsize, nloops, nsec, i, j, n;
-    long            *ptrin, *ptrout, *ip, *op;
-    char            *addrin, *addrout, *buf, area[65536], *ptmp;
+    int             syncfreq, npages, nrrefreshs, j;
+    long            psize, bsize, fsize, nloops, nsec, n;
+    char            *buf, area[65536], *ptmp;
     struct stat     sb;
     struct timespec mtime, checktime;
 
-    if ((argc < 3) || (argc > 7)) {
+    if ((argc < 3) || (argc > 6)) {
         fprintf(stderr, "%s infile outfile [pagespersecond  syncfrequency  npages]\n", argv[0]);
         fprintf(stderr, "   'loopspersecond': 1..5000 (default 1600),\n");
         fprintf(stderr, "   'syncfrequency': 0..20 (default 5) output sync'ed every 2^syncfreq loops,\n");
@@ -83,14 +79,12 @@ int main(int argc, char *argv[]) {
     /* determine all parameters 
          psize: size of pages
          bsize: npages * psize
-         lsize: long ints in blocks of length npages*psize 
          buf:   buffer aligned to page size
          fsize: size of input and output file 
          nloops:number of loops
     */
     psize = sysconf(_SC_PAGE_SIZE);
     bsize = npages * psize;
-    lsize = bsize / sizeof(long);
     if (npages < 16)
         for (buf = area; (long)buf % psize != 0; buf++);
     else {
@@ -111,26 +105,13 @@ int main(int argc, char *argv[]) {
     if (posix_fallocate(fdout, 0, fsize))
         handle_error("fallocate");
 
-    /* mmap input and output */
-    addrin = mmap(NULL, fsize, PROT_READ,
-                  MAP_PRIVATE | MAP_POPULATE, fdin, 0);
-    if (addrin == MAP_FAILED)
-        handle_error("mmap input file");
-
-    addrout = mmap(NULL, fsize, PROT_WRITE,
-                   MAP_SHARED, fdout, 0);
-    if (addrout == MAP_FAILED)
-        handle_error("mmap output file");
-
     /* the main loop */
     clock_gettime(CLOCK_MONOTONIC, &mtime);
     clock_gettime(CLOCK_MONOTONIC, &checktime);
-    for(n=0, ptrin = (long*)addrin, ptrout = (long*)addrout; 
-             n<nloops; 
-             ptrin+=lsize, ptrout+=lsize, n++) {
+    for(n=0; n<nloops; n++) {
          /* sync output every syncfreq pages, reset timer */
          if (n > 0 && n % syncfreq == 0) {
-             msync(addrout+(n-syncfreq)*bsize, syncfreq*bsize, MS_SYNC);
+             fdatasync(fdout);
              clock_gettime(CLOCK_MONOTONIC, &mtime);
          }
          /* increase time to wake up */
@@ -141,31 +122,28 @@ int main(int argc, char *argv[]) {
          }
          /* refresh data to write next, npages pages should fit into L1 cache */
          memclean(buf, bsize);         
-         cpblk(ptrin, (long*)buf);
+         read(fdin, (void*)buf, bsize);
          for(j=nrrefreshs; j; j--) {
              refreshmem(buf, bsize);
          }
          while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL)
                      != 0);
-         /* now copy the refreshed pages */
-         cpblk((long*)buf, ptrout);
+         /* now copy the refreshed page */
+         write(fdout, (void*)buf, bsize);
     }
          
     /* handle partial page at the end */
     n = nloops*bsize;
     if (n < fsize) {
-        memcpy(buf, addrin+n, fsize - n);
+        read(fdin, (void*)buf, fsize - n);
         refreshmem(buf, fsize - n);
-        memcpy(addrout+n, buf, fsize - n);
+        write(fdout, (void*)buf, fsize - n);
     }
 
-     msync(addrout, fsize, MS_SYNC);
+    fdatasync(fdout);
+    close(fdin);
+    close(fdout);
 
-     munmap(addrin, fsize);
-     munmap(addrout, fsize);
-     close(fdin);
-     close(fdout);
-
-     exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
 }
 

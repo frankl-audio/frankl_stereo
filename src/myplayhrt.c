@@ -210,6 +210,12 @@ void usage( ) {
 "      it is normal that the first block and one or two blocks at the end\n"
 "      return fewer data).\n"
 "\n"
+"  --number-refreshs=intval, -R intval\n"
+"      the program rewrites its data in place before output, hoping for\n"
+"      a representation in memory that causes less jitter on playback.\n"
+"      The default is to call the procedure 3 times, you may investigate\n"
+"      the effect with different values (higher numbers need more CPU time).\n"
+"\n"
 "  --verbose, -v\n"
 "      print some information during startup and operation.\n"
 "      This option can be given twice for more output about timing\n"
@@ -275,7 +281,7 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     int sfd, s, moreinput, err, verbose, nrchannels, startcount, sumavg,
-        stripped, innetbufsize, dobufstats, countdelay, maxbad;
+        stripped, innetbufsize, dobufstats, countdelay, maxbad, nrrefs, j;
     long blen, hlen, ilen, olen, extra, loopspersec, nrdelays, sleep,
          nsec, count, wnext, badloops, badreads, readmissing, avgav, checkav;
     long long icount, ocount, badframes;
@@ -325,6 +331,7 @@ int main(int argc, char *argv[])
         {"shared", no_argument, 0, 'F' },
         {"stripped", no_argument, 0, 'X' },
         {"overwrite", required_argument, 0, 'O' },
+        {"number-refreshs", required_argument, 0, 'R' },
         {"verbose", no_argument, 0, 'v' },
         {"no-buf-stats", no_argument, 0, 'y' },
         {"no-delay-stats", no_argument, 0, 'j' },
@@ -356,6 +363,7 @@ int main(int argc, char *argv[])
     nrchannels = 2;
     access = SND_PCM_ACCESS_RW_INTERLEAVED;
     extrabps = 0;
+    nrrefs = 3;
     sleep = 0;
     maxbad = 4;
     nonblock = 0;
@@ -365,7 +373,7 @@ int main(int argc, char *argv[])
     stripped = 0;
     dobufstats = 1;
     countdelay = 1;
-    while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:e:m:K:o:NFXO:vyjVh",
+    while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:R:e:m:K:o:NFXO:vyjVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'r':
@@ -382,6 +390,9 @@ int main(int argc, char *argv[])
           break;
         case 'i':
           ilen = atoi(optarg);
+          break;
+        case 'R':
+          nrrefs = atoi(optarg);
           break;
         case 'n':
           loopspersec = atoi(optarg);
@@ -756,9 +767,9 @@ int main(int argc, char *argv[])
                mtime.tv_nsec -= 1000000000;
                mtime.tv_sec++;
              }
-             refreshmem(iptr, ilen);
+             for(j=nrrefs; j; j--)
+                 refreshmem(iptr, ilen);
              clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
-             refreshmem(iptr, ilen);
              snd_pcm_mmap_commit(pcm_handle, offset, frames);
              count++;
           }

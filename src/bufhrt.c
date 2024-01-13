@@ -151,6 +151,12 @@ void usage( ) {
 "      the program is running can be checked with 'netstat -tpn'.\n"
 "      Usually the operation system chooses sensible values itself.\n"
 "\n"
+"  --number-refreshs=intval, -R intval\n"
+"      the program rewrites its data in place before output, hoping for\n"
+"      a representation in memory that causes less jitter on playback.\n"
+"      The default is to call the procedure 3 times, you may investigate\n"
+"      the effect with different values (higher numbers need more CPU time).\n"
+"\n"
 "  --verbose, -v\n"
 "      print some information during startup and operation.\n"
 "\n"
@@ -202,7 +208,7 @@ int main(int argc, char *argv[])
 {
     struct sockaddr_in serv_addr;
     int listenfd, connfd, ifd, s, moreinput, optval=1, verbose, rate,
-        bytesperframe, optc, interval, shared, innetbufsize,
+        bytesperframe, optc, interval, shared, innetbufsize, nrrefs, j,
         outnetbufsize, dsync;
     long blen, hlen, ilen, olen, outpersec, loopspersec, nsec, count, wnext,
          badreads, badreadbytes, badwrites, badwritebytes, lcount, 
@@ -241,6 +247,7 @@ int main(int argc, char *argv[])
         {"extra-bytes-per-second", required_argument, 0, 'e' },
         {"in-net-buffer-size", required_argument, 0, 'K' },
         {"out-net-buffer-size", required_argument, 0, 'L' },
+        {"number-refreshs", required_argument, 0, 'R' },
         {"overwrite", required_argument, 0, 'O' }, /* not used, ignored */
         {"interval", no_argument, 0, 'I' },
         {"verbose", no_argument, 0, 'v' },
@@ -276,6 +283,7 @@ int main(int argc, char *argv[])
     extrabps = 0.0;
     innetbufsize = 0;
     outnetbufsize = 0;
+    nrrefs = 3;
     verbose = 0;
     while ((optc = getopt_long(argc, argv, "p:o:b:i:D:n:m:s:f:F:H:P:e:vVhd",
             longoptions, &optind)) != -1) {
@@ -300,6 +308,9 @@ int main(int argc, char *argv[])
           break;
         case 'm':
           outpersec = atoi(optarg);
+          break;
+        case 'R':
+          nrrefs = atoi(optarg);
           break;
         case 's':
           rate = atoi(optarg);
@@ -616,9 +627,8 @@ int main(int argc, char *argv[])
                     c++;
                  }
              }
-             refreshmem((char*)ptr, c);
-             refreshmem((char*)ptr, c);
-             refreshmem((char*)ptr, c);
+             for(j=nrrefs; j; j--)
+                 refreshmem((char*)ptr, c);
              while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
                                                                 &mtime, NULL)
                     != 0) ;
@@ -694,9 +704,8 @@ int main(int argc, char *argv[])
                 mtime.tv_nsec -= 1000000000;
                 mtime.tv_sec++;
               }
-              refreshmem((char*)optr, wnext);
-              refreshmem((char*)optr, wnext);
-              refreshmem((char*)optr, wnext);
+              for(j=nrrefs; j; j--)
+                  refreshmem((char*)optr, wnext);
               clock_gettime(CLOCK_MONOTONIC, &mtime1);
               if ((mtime1.tv_sec > mtime.tv_sec)
                   || (mtime1.tv_sec == mtime.tv_sec
@@ -807,9 +816,8 @@ int main(int argc, char *argv[])
           mtime.tv_nsec -= 1000000000;
           mtime.tv_sec++;
         }
-        refreshmem((char*)optr, wnext);
-        refreshmem((char*)optr, wnext);
-        refreshmem((char*)optr, wnext);
+        for(j=nrrefs; j; j--)
+            refreshmem((char*)optr, wnext);
         while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL)
                != 0) ;
         /* write a chunk, this comes first after waking from sleep */

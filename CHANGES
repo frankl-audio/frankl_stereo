@@ -2,6 +2,13 @@
 
 0.8 to 0.9
 
+- introduced option --number-refreshs=<nr> to various programs
+  and analogous further option to cleancp (the latter using a high
+  default value).
+
+- fixed a problem with using assembler code for refreshing memory
+  on x86_64 and aarch64.
+
 - highrestest with optional integer parameter does a 10 second
   with 10000 sleeps for statistics about actual presision
   (try 'highrestest 500')

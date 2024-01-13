@@ -62,7 +62,64 @@ inline void memclean(char* ptr, int n)
 }
 
 #else
+#ifdef REFRESHAA64
+#include <stdint.h>
 
+/* n is number of 8 byte quad words */
+inline void refreshmem_aa64(void* addr, int n);
+
+/* nb is number of bytes */
+inline void refreshmem(char* ptr, long nb) {
+  long n, off;
+  void *vp;
+  off = (long)ptr % 8;
+  if (off != 0){
+     vp = (void*)ptr + 8 - off;
+  } else {
+     vp = (void*)ptr;
+  }
+  n = (nb-off)/8;
+  refreshmem_aa64(vp, n);
+}
+
+inline void memclean(char* ptr, long nb)
+{
+  long i;
+  for (i=0; i < nb; i++)
+      ptr[i] = 0;
+  refreshmem(ptr, nb);
+}
+
+#else
+#ifdef REFRESHX8664
+#include <stdint.h>
+
+/* n is number of 8 byte quad words */
+inline void refreshmem_x8664(void* addr, int n);
+
+/* nb is number of bytes */
+inline void refreshmem(char* ptr, long nb) {
+  long n, off;
+  void *vp;
+  off = (long)ptr % 8;
+  if (off != 0){
+     vp = (void*)ptr + 8 - off;
+  } else {
+     vp = (void*)ptr;
+  }
+  n = (nb-off)/8;
+  refreshmem_x8664(vp, n);
+}
+
+inline void memclean(char* ptr, long nb)
+{
+  long i;
+  for (i=0; i < nb; i++)
+      ptr[i] = 0;
+  refreshmem(ptr, nb);
+}
+
+#else
 #include <stdint.h>
 /* default version in C, compile with -O0, such that this is not
    optimized away */
@@ -103,9 +160,11 @@ inline void memclean(char* ptr, long n)
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
-#endif
-#endif
 
+#endif
+#endif
+#endif
+#endif
 
 
 

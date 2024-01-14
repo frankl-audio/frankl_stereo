@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
     struct stat     sb;
     struct timespec mtime, checktime;
 
-    if ((argc < 3) || (argc > 6)) {
+    if ((argc < 3) || (argc > 7)) {
         fprintf(stderr, "%s infile outfile [pagespersecond  syncfrequency  npages]\n", argv[0]);
         fprintf(stderr, "   'loopspersecond': 1..5000 (default 1600),\n");
         fprintf(stderr, "   'syncfrequency': 0..20 (default 5) output sync'ed every 2^syncfreq loops,\n");

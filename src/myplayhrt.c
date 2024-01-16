@@ -1,5 +1,7 @@
 /*
-playhrt.c                Copyright frankl 2013-2016
+playhrt.c                Copyright frankl 2013-2024
+
+This is frankl's private variant, not documented, not cleaned.
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
@@ -281,7 +283,7 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     int sfd, s, moreinput, err, verbose, nrchannels, startcount, sumavg,
-        stripped, innetbufsize, dobufstats, countdelay, maxbad, nrrefs, j;
+        stripped, innetbufsize, dobufstats, countdelay, maxbad, nrrefs;
     long blen, hlen, ilen, olen, extra, loopspersec, nrdelays, sleep,
          nsec, count, wnext, badloops, badreads, readmissing, avgav, checkav;
     long long icount, ocount, badframes;
@@ -767,8 +769,7 @@ int main(int argc, char *argv[])
                mtime.tv_nsec -= 1000000000;
                mtime.tv_sec++;
              }
-             for(j=nrrefs; j; j--)
-                 refreshmem(iptr, ilen);
+             refreshmems(iptr, ilen, nrrefs);
              clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
              snd_pcm_mmap_commit(pcm_handle, offset, frames);
              count++;

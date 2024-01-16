@@ -1,5 +1,5 @@
 /*
-cprefresh.c                Copyright frankl 2013-2015
+cprefresh.c                Copyright frankl 2013-2024
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
@@ -21,6 +21,14 @@ inline void refreshmem(char* ptr, int n)
   int off;
   off = (unsigned int)ptr % 8;
   memcp_vfpX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/8)*8);
+}
+inline void refreshmems(char* ptr, int n, int k)
+{
+  /* we make shure below that we can access ptr-off */
+  int off, j;
+  off = (unsigned int)ptr % 8;
+  for(j=k; j; j--)
+      memcp_vfpX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/8)*8);
 }
 inline void memclean(char* ptr, int n)
 {
@@ -48,6 +56,14 @@ inline void refreshmem(char* ptr, int n)
   off = (unsigned int)ptr % 4;
   memcp_regX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/4)*4);
 }
+inline void refreshmems(char* ptr, int n, int k)
+{
+  /* we make shure below that we can access ptr-off */
+  int off, j;
+  off = (unsigned int)ptr % 4;
+  for(j=k; j; j--)
+      memcp_regX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/4)*4);
+}
 inline void memclean(char* ptr, int n)
 {
   int i, off, n0;
@@ -67,6 +83,8 @@ inline void memclean(char* ptr, int n)
 
 /* n is number of 8 byte quad words */
 inline void refreshmem_aa64(void* addr, int n);
+/* same with k iterations */
+inline void refreshmems_aa64(void* addr, int n, int k);
 
 /* nb is number of bytes */
 inline void refreshmem(char* ptr, long nb) {
@@ -80,6 +98,19 @@ inline void refreshmem(char* ptr, long nb) {
   }
   n = (nb-off)/8;
   refreshmem_aa64(vp, n);
+}
+/* k iterations */
+inline void refreshmems(char* ptr, long nb, long k) {
+  long n, off;
+  void *vp;
+  off = (long)ptr % 8;
+  if (off != 0){
+     vp = (void*)ptr + 8 - off;
+  } else {
+     vp = (void*)ptr;
+  }
+  n = (nb-off)/8;
+  refreshmems_aa64(vp, n, k);
 }
 
 inline void memclean(char* ptr, long nb)
@@ -110,6 +141,19 @@ inline void refreshmem(char* ptr, long nb) {
   n = (nb-off)/8;
   refreshmem_x8664(vp, n);
 }
+inline void refreshmems(char* ptr, long nb, long k) {
+  long n, off, j;
+  void *vp;
+  off = (long)ptr % 8;
+  if (off != 0){
+     vp = (void*)ptr + 8 - off;
+  } else {
+     vp = (void*)ptr;
+  }
+  n = (nb-off)/8;
+  for(j=k; j; j--)
+      refreshmem_x8664(vp, n);
+}
 
 inline void memclean(char* ptr, long nb)
 {
@@ -139,6 +183,13 @@ inline void refreshmem(char* ptr, long n)
       up++;
   }
 }
+inline void refreshmems(char* ptr, long n, long k)
+{
+  long j;
+  for(j=k; j; j--)
+      refreshmem(ptr, n);
+}
+
 inline void memclean(char* ptr, long n)
 {
   long i, off, n0, sz;

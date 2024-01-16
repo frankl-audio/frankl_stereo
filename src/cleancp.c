@@ -29,7 +29,7 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 int main(int argc, char *argv[]) {
     int             fdin, fdout;
     int             syncfreq, npages, nrrefreshs;
-    long            psize, bsize, fsize, lsize, nloops, nsec, i, j, n;
+    long            psize, bsize, fsize, lsize, nloops, nsec, i, n;
     long            *ptrin, *ptrout, *ip, *op;
     char            *addrin, *addrout, *buf, area[65536], *ptmp;
     struct stat     sb;
@@ -142,9 +142,7 @@ int main(int argc, char *argv[]) {
          /* refresh data to write next, npages pages should fit into L1 cache */
          memclean(buf, bsize);         
          cpblk(ptrin, (long*)buf);
-         for(j=nrrefreshs; j; j--) {
-             refreshmem(buf, bsize);
-         }
+         refreshmems(buf, bsize, nrrefreshs);
          while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL)
                      != 0);
          /* now copy the refreshed pages */

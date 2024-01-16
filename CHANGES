@@ -2,6 +2,9 @@
 
 0.8 to 0.9
 
+- new internal function refreshmems for multiple memrefresh
+  (on aarch64 this uses a new assembler function).
+
 - introduced option --number-refreshs=<nr> to various programs
   and analogous further option to cleancp (the latter using a high
   default value).

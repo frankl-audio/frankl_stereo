@@ -1,5 +1,5 @@
 /*
-resample_soxr.c                Copyright frankl 2018
+resample_soxr.c                Copyright frankl 2018-2024
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
   double inrate, outrate, phase, bwidth, prec, OLEN;
   double *inp, *out;
   int32_t *iout;
-  int verbose, optc, fd, out32, nrrefs, j;
+  int verbose, optc, fd, out32, nrrefs;
   long intotal = 0, outtotal = 0, blen, mlen, check, i, nch;
   soxr_t soxr;
   soxr_error_t error;
@@ -568,8 +568,7 @@ int main(int argc, char *argv[])
       inp = NULL;
     }
     /* call resampler */
-    for(j=nrrefs; j; j--)
-        refreshmem((char*)inp, nch*sizeof(double)*mlen);
+    refreshmems((char*)inp, nch*sizeof(double)*mlen, nrrefs);
     error = soxr_process(soxr, inp, mlen, &indone,
                                out, OLEN, &outdone);
     if (mlen > indone) {
@@ -617,14 +616,12 @@ int main(int argc, char *argv[])
     }
  
     /* write output */
-    for(j=nrrefs; j; j--)
-        refreshmem((char*)out, nch*sizeof(double)*outdone);
+    refreshmems((char*)out, nch*sizeof(double)*outdone, nrrefs);
     if (out32) {
         memclean((char*)iout, nch*sizeof(int32_t)*outdone);
         for (i=0; i<nch*outdone; i++)
             iout[i] = (int32_t) (out[i] * 2147483647);
-        for(j=nrrefs; j; j--)
-            refreshmem((char*)iout, nch*sizeof(int32_t)*outdone);
+        refreshmems((char*)iout, nch*sizeof(int32_t)*outdone, nrrefs);
         check = fwrite((void*)iout, nch*sizeof(int32_t), outdone, stdout);
     } else {
         check = fwrite((void*)out, nch*sizeof(double), outdone, stdout);

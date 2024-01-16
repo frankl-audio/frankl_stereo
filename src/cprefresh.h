@@ -1,12 +1,12 @@
 /*
-cprefresh.h                Copyright frankl 2013-2015
+cprefresh.h                Copyright frankl 2013-2024
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
 http://www.gnu.org/licenses/gpl.txt for license details.
 
 Here are some utility functions to clean or refresh RAM.
-Optionally, they use assembler functions on ARM.
+Optionally, they use assembler functions on ARM and X86_64.
 */
 
 
@@ -25,5 +25,6 @@ inline void memclean_vfpX(void*, int);
 #endif
 
 inline void refreshmem(char* ptr, int n);
+inline void refreshmems(char* ptr, int n, int k);
 inline void memclean(char* ptr, int n);
 

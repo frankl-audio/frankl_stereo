@@ -37,6 +37,9 @@ Overview:
       read sound file or shared memory and output samples as 64-bit
       floating point numbers
 
+ - cleancp and cleancp2
+      make a cleaner copy of (audio and other) files
+
  - scripts/play_*
       example scripts for playing music with programs from this package
  

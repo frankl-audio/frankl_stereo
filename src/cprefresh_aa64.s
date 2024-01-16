@@ -32,6 +32,48 @@ refreshmem_aa64:
 
 	.text
 	.align	2
+	.global	refreshmems_aa64
+	.type	refreshmems_aa64, %function
+refreshmems_aa64:
+	.cfi_startproc
+        mov     x4, x0
+        mov     x5, #1
+        mov     x6, #1
+        mov     x7, xzr
+        mvn     x7, x7
+.COUNT:
+        cmp     x2, x6
+        blt     .IRET
+.ILOOP:
+        cmp     x1, x5
+        blt     .ITER
+        ldr     x3, [x4]
+        eor     x3, x3, x7
+        eor     x3, x3, x7
+        eor     x3, x3, x7
+        str     x3, [x4]
+        eor     x3, x3, x7
+        eor     x3, x3, x7
+        eor     x3, x3, x7
+        str     x3, [x4]
+        add     x4, x4, 8
+        add     x5, x5, 1
+        b       .ILOOP
+.ITER:
+        add     x6, x6, 1
+        mov     x4, x0
+        mov     x5, #1
+        mov     x7, xzr
+        mvn     x7, x7
+        b       .COUNT
+.IRET:
+        ret
+	.cfi_endproc
+
+
+
+	.text
+	.align	2
 	.global cleanregs_aa64	
 	.type	cleanregs_aa64, %function
 cleanregs_aa64:

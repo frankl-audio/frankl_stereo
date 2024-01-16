@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
 {
     struct sockaddr_in serv_addr;
     int listenfd, connfd, ifd, s, moreinput, optval=1, verbose, rate,
-        bytesperframe, optc, interval, shared, innetbufsize, nrrefs, j,
+        bytesperframe, optc, interval, shared, innetbufsize, nrrefs,
         outnetbufsize, dsync;
     long blen, hlen, ilen, olen, outpersec, loopspersec, nsec, count, wnext,
          badreads, badreadbytes, badwrites, badwritebytes, lcount, 
@@ -627,8 +627,7 @@ int main(int argc, char *argv[])
                     c++;
                  }
              }
-             for(j=nrrefs; j; j--)
-                 refreshmem((char*)ptr, c);
+             refreshmems((char*)ptr, c, nrrefs);
              while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
                                                                 &mtime, NULL)
                     != 0) ;
@@ -704,8 +703,7 @@ int main(int argc, char *argv[])
                 mtime.tv_nsec -= 1000000000;
                 mtime.tv_sec++;
               }
-              for(j=nrrefs; j; j--)
-                  refreshmem((char*)optr, wnext);
+              refreshmems((char*)optr, wnext, nrrefs);
               clock_gettime(CLOCK_MONOTONIC, &mtime1);
               if ((mtime1.tv_sec > mtime.tv_sec)
                   || (mtime1.tv_sec == mtime.tv_sec
@@ -816,8 +814,7 @@ int main(int argc, char *argv[])
           mtime.tv_nsec -= 1000000000;
           mtime.tv_sec++;
         }
-        for(j=nrrefs; j; j--)
-            refreshmem((char*)optr, wnext);
+        refreshmems((char*)optr, wnext, nrrefs);
         while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL)
                != 0) ;
         /* write a chunk, this comes first after waking from sleep */

@@ -163,12 +163,6 @@ void usage( ) {
 "      The file may only contain the value of --volume, in this case RACE\n"
 "      will be disabled.\n"
 "\n"
-"  --number-refreshs=intval, -R intval\n"
-"      the program rewrites its data in place before output, hoping for\n"
-"      a representation in memory that causes less jitter on playback.\n"
-"      The default is to call the procedure 3 times, you may investigate\n"
-"      the effect with different values (higher numbers need more CPU time).\n"
-"\n"
 "  --fading-length=intval, -l intval\n"
 "      number of frames used for fading to new parameters (when the\n"
 "      file given in --param-file was changed). Default is 44100, for high \n"
@@ -283,7 +277,7 @@ int main(int argc, char *argv[])
   double inrate, outrate, phase, bwidth, prec, OLEN;
   double *inp, *out;
   int32_t *iout;
-  int verbose, optc, fd, out32, nrrefs;
+  int verbose, optc, fd, out32;
   long intotal = 0, outtotal = 0, blen, mlen, check, i, nch;
   soxr_t soxr;
   soxr_error_t error;
@@ -326,7 +320,6 @@ int main(int argc, char *argv[])
       {"until", required_argument, 0, 'u' },
       {"number-frames", required_argument, 0, 'n' },
       {"buffer-length", required_argument, 0, 'b' },
-      {"number-refreshs", required_argument, 0, 'R' },
       {"toint32", no_argument, 0, 'I' },
       {"verbose", no_argument, 0, 'p' },
       {"version", no_argument, 0, 'V' },
@@ -342,7 +335,6 @@ int main(int argc, char *argv[])
   prec = 33.0;
   nch = 2;
   blen = 8192;
-  nrrefs = 3;
   fnam = NULL;
   memname = NULL;
   start = 0;
@@ -356,7 +348,7 @@ int main(int argc, char *argv[])
   pnam = NULL;
   verbose = 0;
   while ((optc = getopt_long(argc, argv, 
-          "i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:b:R:IpVh",
+          "i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:b:IpVh",
           longoptions, &optind)) != -1) {
       switch (optc) {
       case 'v':
@@ -391,9 +383,6 @@ int main(int argc, char *argv[])
         break;
       case 's':
         start = atoi(optarg);
-        break;
-      case 'R':
-        nrrefs = atoi(optarg);
         break;
       case 'u':
         until = atoi(optarg);
@@ -568,7 +557,7 @@ int main(int argc, char *argv[])
       inp = NULL;
     }
     /* call resampler */
-    refreshmems((char*)inp, nch*sizeof(double)*mlen, nrrefs);
+    refreshmem((char*)inp, nch*sizeof(double)*mlen);
     error = soxr_process(soxr, inp, mlen, &indone,
                                out, OLEN, &outdone);
     if (mlen > indone) {
@@ -616,12 +605,12 @@ int main(int argc, char *argv[])
     }
  
     /* write output */
-    refreshmems((char*)out, nch*sizeof(double)*outdone, nrrefs);
+    refreshmem((char*)out, nch*sizeof(double)*outdone);
     if (out32) {
         memclean((char*)iout, nch*sizeof(int32_t)*outdone);
         for (i=0; i<nch*outdone; i++)
             iout[i] = (int32_t) (out[i] * 2147483647);
-        refreshmems((char*)iout, nch*sizeof(int32_t)*outdone, nrrefs);
+        refreshmem((char*)iout, nch*sizeof(int32_t)*outdone)
         check = fwrite((void*)iout, nch*sizeof(int32_t), outdone, stdout);
     } else {
         check = fwrite((void*)out, nch*sizeof(double), outdone, stdout);

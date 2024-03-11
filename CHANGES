@@ -2,21 +2,12 @@
 
 0.8 to 0.9
 
-- new internal function refreshmems for multiple memrefresh
-  (on aarch64 this uses a new assembler function).
-
-- introduced option --number-refreshs=<nr> to various programs
-  and analogous further option to cleancp (the latter using a high
-  default value).
-
 - fixed a problem with using assembler code for refreshing memory
   on x86_64 and aarch64.
 
 - highrestest with optional integer parameter does a 10 second
   with 10000 sleeps for statistics about actual presision
   (try 'highrestest 500')
-
-- new program cleancp that can be used instead of improvefile
 
 - new option --dsyncs-per-second for bufhrt, used in improvefile
 

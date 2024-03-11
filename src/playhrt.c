@@ -206,12 +206,6 @@ void usage( ) {
 "      it is normal that the first block and one or two blocks at the end\n"
 "      return fewer data).\n"
 "\n"
-"  --number-refreshs=intval, -R intval\n"
-"      the program rewrites its data in place before output, hoping for\n"
-"      a representation in memory that causes less jitter on playback.\n"
-"      The default is to call the procedure 3 times, you may investigate\n"
-"      the effect with different values (higher numbers need more CPU time).\n"
-"\n"
 "  --verbose, -v\n"
 "      print some information during startup and operation.\n"
 "      This option can be given twice for more output about timing\n"
@@ -277,7 +271,7 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     int sfd, s, moreinput, err, verbose, nrchannels, startcount, sumavg,
-        stripped, innetbufsize, dobufstats, countdelay, maxbad, nrrefs;
+        stripped, innetbufsize, dobufstats, countdelay, maxbad;
     long blen, hlen, ilen, olen, extra, loopspersec, nrdelays, sleep,
          nsec, count, wnext, badloops, badreads, readmissing, avgav, checkav;
     long long icount, ocount, badframes;
@@ -321,7 +315,6 @@ int main(int argc, char *argv[])
         {"non-blocking-write", no_argument, 0, 'N' },
         {"stripped", no_argument, 0, 'X' },
         {"overwrite", required_argument, 0, 'O' },
-        {"number-refreshs", required_argument, 0, 'R' },
         {"verbose", no_argument, 0, 'v' },
         {"no-buf-stats", no_argument, 0, 'y' },
         {"no-delay-stats", no_argument, 0, 'j' },
@@ -356,13 +349,12 @@ int main(int argc, char *argv[])
     maxbad = 4;
     nonblock = 0;
     innetbufsize = 0;
-    nrrefs = 3;
     corr = 0;
     verbose = 0;
     stripped = 0;
     dobufstats = 1;
     countdelay = 1;
-    while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:R:e:m:K:o:NXO:vyjVh",
+    while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:e:m:K:o:NXO:vyjVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'r':
@@ -385,9 +377,6 @@ int main(int argc, char *argv[])
           break;
         case 's':
           rate = atoi(optarg);
-          break;
-        case 'R':
-          nrrefs = atoi(optarg);
           break;
         case 'f':
           if (strcmp(optarg, "S16_LE")==0) {
@@ -678,7 +667,7 @@ int main(int argc, char *argv[])
             mtime.tv_nsec -= 1000000000;
             mtime.tv_sec++;
           }
-          refreshmems(optr, wnext*bytesperframe, nrrefs);
+          refreshmem(optr, wnext*bytesperframe);
           clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
           /* write a chunk, this comes first immediately after waking up */
 #ifdef ALSANC
@@ -781,7 +770,7 @@ int main(int argc, char *argv[])
             mtime.tv_nsec -= 1000000000;
             mtime.tv_sec++;
           }
-          refreshmems(iptr, s, nrrefs);
+          refreshmem(iptr, s);
           clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
           snd_pcm_mmap_commit(pcm_handle, offset, frames);
           icount += s;
@@ -801,7 +790,7 @@ int main(int argc, char *argv[])
             mtime.tv_nsec -= 1000000000;
             mtime.tv_sec++;
           }
-          refreshmems(iptr, s, nrrefs);
+          refreshmem(iptr, s);
           clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
           snd_pcm_mmap_commit(pcm_handle, offset, frames);
           icount += s;
@@ -835,7 +824,7 @@ int main(int argc, char *argv[])
             mtime.tv_nsec -= 1000000000;
             mtime.tv_sec++;
           }
-          refreshmems(iptr, s, nrrefs);
+          refreshmem(iptr, s);
           clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
           snd_pcm_mmap_commit(pcm_handle, offset, frames);
           icount += s;
@@ -929,7 +918,7 @@ int main(int argc, char *argv[])
 
 
           /* we refresh the new data before sleeping and commiting */
-          refreshmems(iptr, s, nrrefs);
+          refreshmem(iptr, s);
 
           /* debug:  check that we really sleep to some time in the future */
           if (countdelay) {

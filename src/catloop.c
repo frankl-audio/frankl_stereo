@@ -195,10 +195,10 @@ int main(int argc, char *argv[])
                    fprintf(stderr, "catloop: Cannot stat shared memory %s.\n", fnames[i-optind]);
                    exit(24);
                }
-               size = sb.st_size - sizeof(int);
+               size = sb.st_size - sizeof(long);
            }
            /* map the memory */
-           mems[i-optind] = mmap(NULL, sizeof(int)+size,
+           mems[i-optind] = mmap(NULL, sizeof(long)+size,
                            PROT_READ, MAP_SHARED, fd[i-optind], 0);
            if (mems[i-optind] == MAP_FAILED) {
                fprintf(stderr, "catloop: Cannot map shared memory.");
@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
            /* get lock */
            sem_wait(*sem);
            /* find length of relevant memory chunk */
-           flen = *((int*)(*mem));
+           flen = (int)(*((long*)(*mem))); 
            if (flen == 0) {
                /* done, unlink semaphores and shared memory */
                fname = fnames;
@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
                exit(0);
            }
            /* write shared memory content to stdout */
-           ptr = *mem + sizeof(int);
+           ptr = *mem + sizeof(long);
            sz = 0;
            while (sz < flen) {
                if (flen - sz <= blocksize)

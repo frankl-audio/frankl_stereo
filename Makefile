@@ -14,7 +14,7 @@ CFLAGSNO=-O0 -Wall -z execstack -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$
 # targets
 ALL: bin tmp bin/volrace bin/bufhrt bin/highrestest \
      bin/writeloop bin/catloop bin/playhrt bin/cptoshm bin/shmcat \
-     bin/resample_soxr bin/cat64 
+     bin/resample_soxr bin/cat64 bin/shownfinfo bin/music2nf
 
 bin:
 	mkdir -p bin
@@ -62,7 +62,7 @@ bin/bufhrt: src/version.h tmp/net.o src/bufhrt.c tmp/cprefresh.o tmp/cprefresh_a
 bin/highrestest: src/highrestest.c |bin
 	$(CC) $(CFLAGSNO) -o bin/highrestest src/highrestest.c -lrt
 
-bin/writeloop: src/version.h src/writeloop.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+bin/writeloop: src/version.h src/nf_io.h src/writeloop.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/writeloop tmp/cprefresh.o tmp/cprefresh_ass.o src/writeloop.c -lpthread -lrt
 
 bin/catloop: src/version.h src/catloop.c |bin
@@ -74,13 +74,19 @@ bin/cptoshm: src/version.h src/cptoshm.c tmp/cprefresh_ass.o tmp/cprefresh.o |bi
 bin/shmcat: src/version.h src/shmcat.c tmp/cprefresh_ass.o tmp/cprefresh.o |bin
 	$(CC) $(CFLAGS) -o bin/shmcat tmp/cprefresh_ass.o tmp/cprefresh.o src/shmcat.c -lrt
 
-bin/resample_soxr: src/version.h src/resample_soxr.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+bin/resample_soxr: src/version.h src/nf_io.h src/resample_soxr.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/resample_soxr src/resample_soxr.c tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lrt
 
 resampler: bin/resample_soxr
 
 bin/cat64: src/version.h src/cat64.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/cat64 src/cat64.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
+
+bin/shownfinfo: src/version.h src/shownfinfo.c src/nf_io.h  |bin
+	$(CC) $(CFLAGS) -o bin/shownfinfo src/shownfinfo.c 
+
+bin/music2nf: src/version.h src/nf_io.h src/music2nf.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/music2nf src/music2nf.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
 
 
 

@@ -21,6 +21,7 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 #include <string.h>
 #include <semaphore.h>
 #include "cprefresh.h"
+#include "nf_io.h"
 
 /* help page */
 /* vim hint to remove resp. add quotes:
@@ -67,6 +68,14 @@ void usage( ) {
 "      the given names start with a slash like '/file1'.\n"
 "      For large amounts of shared memory you may need to enlarge\n"
 "      '/proc/sys/kernel/shmmax' directly or via sysctl.\n"
+"\n"
+"  --nfinfo=nfnam, -M nfnam\n"
+"      with this and the following option input can be read from an nf file,\n"
+"      this option specifies the nf info file.\n"
+"\n"
+"  --nfid=id, -N id\n"
+"      this is the nf id of the file to read, the id must be found in the \n"
+"      nf info file specified by the previous option.\n"
 "\n"
 "  --force-shm, -x\n"
 "      if --shared is used writeloop may fail to start if 'semaphores' are\n"
@@ -122,12 +131,14 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     char **fname, *fnames[100], **tmpname, *tmpnames[100], **mem, *mems[100],
-         *ptr;
+         *ptr, *nfinfo;
     sem_t **sem, *sems[100], **semw, *semsw[100];
     void * buf;
+    long nfid;
     int outfile, fd[100], inp, i, shared, verbose, force, blocksize,
         semflag, size, ret, sz, c, optc;
     off_t skip, checkskip;
+    struct nfrec *nfr;
 
     /* read command line options */
     static struct option longoptions[] = {
@@ -137,6 +148,8 @@ int main(int argc, char *argv[])
         {"skip", required_argument,       0,  'S' },
         {"shared", no_argument, 0, 's' },
         {"force-shm", no_argument, 0, 'x' },
+        {"nfinfo", required_argument, 0, 'M' },
+        {"nfid", required_argument, 0, 'N' },
         {"verbose", no_argument, 0, 'v' },
         {"version", no_argument, 0, 'V' },
         {"help", no_argument, 0, 'h' },
@@ -154,9 +167,11 @@ int main(int argc, char *argv[])
     verbose = 0;
     semflag = O_CREAT | O_EXCL;
     force = 0;
+    nfinfo = NULL;
+    nfid = -2;
     inp = 0;  /* stdin */
     skip = 0;
-    while ((optc = getopt_long(argc, argv, "b:f:F:sVh",
+    while ((optc = getopt_long(argc, argv, "b:f:F:M:N:sVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'b':
@@ -183,6 +198,12 @@ int main(int argc, char *argv[])
           break;
         case 'x':
           force = 1;
+          break;
+        case 'M':
+          nfinfo = strdup(optarg);
+          break;
+        case 'N':
+          nfid = atoi(optarg);
           break;
         case 'v':
           verbose = 1;
@@ -248,12 +269,12 @@ int main(int argc, char *argv[])
                fprintf(stderr, "writeloop: Cannot truncate to 0.");
                exit(23);
            }
-           if (ftruncate(fd[i-optind], sizeof(int)+size) == -1) {
+           if (ftruncate(fd[i-optind], sizeof(long)+size) == -1) {
                fprintf(stderr, "writeloop: Cannot truncate to %d.", size);
                exit(23);
            }
            /* map the memory */
-           mems[i-optind] = mmap(NULL, sizeof(int)+size,
+           mems[i-optind] = mmap(NULL, sizeof(long)+size,
                            PROT_READ | PROT_WRITE, MAP_SHARED, fd[i-optind], 0);
            if (mems[i-optind] == MAP_FAILED) {
                fprintf(stderr, "writeloop: Cannot map shared memory.");
@@ -279,13 +300,82 @@ int main(int argc, char *argv[])
     fnames[argc-optind] = NULL;
     fname = fnames;
     tmpname = tmpnames;
+
     if (verbose) {
       if (inp == 0) 
         fprintf(stderr, "writeloop: Reading from stdin, ");
+      else if (nfinfo)
+        fprintf(stderr, "writeloop: Reading from nf file, ");
       else
         fprintf(stderr, "writeloop: Reading from file, ");
     } 
-    if (shared) {
+    if (nfinfo != NULL) {
+       /* input from nf info, in that case we also set block size and file size to PS */
+        nfr = nfopen(nfinfo, nfid, O_RDONLY, 0);
+        if (nfr == NULL) {
+            fprintf(stderr, "writeloop: cannot open nf file: %s id=%ld.",
+                   nfinfo, nfid);
+            exit(15);
+        }
+        if (skip != 0) {
+            nfclose();
+            nfr = nfopen(nfinfo, nfid, O_RDONLY, skip);
+        }
+        size = PS;
+        blocksize = PS;
+        free(buf);
+        buf = malloc(2*PS);
+        while (((unsigned long)buf) % PS !=0) buf++;
+        sz = (skip/PS)*PS;
+        mem = mems;
+        sem = sems;
+        semw = semsw;
+        memclean(buf, blocksize);
+        c = nfreadpage(buf);
+        refreshmem((char*)buf, blocksize);
+        sz += c;
+        while (c > 0) {
+           if (*fname == NULL) {
+              fname = fnames;
+              tmpname = tmpnames;
+              mem = mems;
+              sem = sems;
+              semw = semsw;
+           }
+           /* get write lock */
+           sem_wait(*semw);
+           ptr = *mem+sizeof(long);
+           memclean(ptr, size);
+           memcpy(ptr, buf, c);
+           refreshmem((char*)ptr, size);
+           *((long*)(*mem)) = (long)c;
+           sem_post(*sem);
+
+           /* read next page */
+           memclean(buf, blocksize);
+           c = nfreadpage(buf);
+           sz += c;
+           fname++;
+           tmpname++;
+           mem++;
+           sem++;
+           semw++;
+        }
+        /* done, indicate by empty memory */
+        nfclose();
+        if (*fname == NULL) {
+           fname = fnames;
+           tmpname = tmpnames;
+           mem = mems;
+           sem = sems;
+           semw = semsw;
+        }
+        sem_wait(*semw);
+        *((int*)(*mem)) = 0;
+        sem_post(*sem);
+        exit(0);
+
+    } else if (shared) {
         if (verbose)
           fprintf(stderr, "writing to shared memory.\n");
         mem = mems;
@@ -310,7 +400,7 @@ int main(int argc, char *argv[])
               sem_post(*sem);
               exit(0);
            }
-           ptr = *mem+sizeof(int);
+           ptr = *mem+sizeof(long);
            memclean(ptr, size);
            while (c > 0 && sz <= size) {
               memcpy(ptr, buf, c);
@@ -319,7 +409,7 @@ int main(int argc, char *argv[])
               c = read(inp, buf, blocksize);
               sz += c;
            }
-           *((int*)(*mem)) = sz - c;
+           *((long*)(*mem)) = (long)(sz - c);
            sz = c;
            sem_post(*sem);
            fname++;

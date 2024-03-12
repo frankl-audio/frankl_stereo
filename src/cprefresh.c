@@ -9,6 +9,7 @@ Here are some utility functions to clean or refresh RAM.
 Optionally, they use assembler functions on ARM.
 */
 
+#include <string.h>
 
 #ifdef REFRESHVFP
 /* on ARM with some version of the CPU feature 'vfp' */
@@ -42,6 +43,14 @@ inline void memclean(char* ptr, int n)
   memclean_vfpX((void*)(ptr+off), n0);
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
+
+inline void cprefresh(char* dest, char* ptr, long n)
+{
+  memclean(dest, n);
+  memcpy(dest, ptr, n);
+  refreshmem(dest, n);
+}
+
 
 #else
 #ifdef REFRESHARM
@@ -77,6 +86,12 @@ inline void memclean(char* ptr, int n)
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
+inline void cprefresh(char* dest, char* ptr, long n)
+{
+  memclean(dest, n);
+  memcpy(dest, ptr, n);
+  refreshmem(dest, n);
+}
 #else
 #ifdef REFRESHAA64
 #include <stdint.h>
@@ -121,6 +136,12 @@ inline void memclean(char* ptr, long nb)
   refreshmem(ptr, nb);
 }
 
+inline void cprefresh(char* dest, char* ptr, long n)
+{
+  memclean(dest, n);
+  memcpy(dest, ptr, n);
+  refreshmem(dest, n);
+}
 #else
 #ifdef REFRESHX8664
 #include <stdint.h>
@@ -163,6 +184,12 @@ inline void memclean(char* ptr, long nb)
   refreshmem(ptr, nb);
 }
 
+inline void cprefresh(char* dest, char* ptr, long n)
+{
+  memclean(dest, n);
+  memcpy(dest, ptr, n);
+  refreshmem(dest, n);
+}
 #else
 #include <stdint.h>
 /* default version in C, compile with -O0, such that this is not
@@ -211,6 +238,12 @@ inline void memclean(char* ptr, long n)
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
+inline void cprefresh(char* dest, char* ptr, long n)
+{
+  memclean(dest, n);
+  memcpy(dest, ptr, n);
+  refreshmem(dest, n);
+}
 
 #endif
 #endif

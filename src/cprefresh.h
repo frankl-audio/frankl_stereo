@@ -24,7 +24,19 @@ inline void memclean_vfpX(void*, int);
 
 #endif
 
+#ifdef REFRESHAA64
+#include <stdint.h>
+
+/* n is number of 8 byte quad words */
+inline void refreshmem_aa64(void* addr, int n);
+/* same with k iterations */
+inline void refreshmems_aa64(void* addr, int n, int k);
+
+#endif
+
 inline void refreshmem(char* ptr, int n);
 inline void refreshmems(char* ptr, int n, int k);
 inline void memclean(char* ptr, int n);
+inline void cprefresh(char* dest, char* ptr, long n);
+
 

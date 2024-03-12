@@ -23,6 +23,7 @@ Compile with
 #include <sndfile.h>
 #include <soxr.h>
 #include "cprefresh.h"
+#include "nf_io.h"
 
 /* help page */
 /* vim hint to remove resp. add quotes:
@@ -114,6 +115,15 @@ void usage( ) {
 "  --shmname=sname, -i sname\n"
 "      name of an audio file in shared memory. The default\n"
 "      is input from stdin.\n"
+"\n"
+"  --nfinfo=nfnam, -M nfnam\n"
+"      with this and the following option raw input can be read from an nf \n"
+"      file, this option specifies the nf info file. The sampling rate and \n"
+"      bit depth of the input is read from the nf information.\n"
+"\n"
+"  --nfid=id, -N id\n"
+"      this is the nf id of the file to read, the id must be found in the \n"
+"      nf info file specified by the previous option.\n"
 "\n"
 "  --toint32, -I\n"
 "      output 32-bit integer samples instead of double floats.\n"
@@ -276,14 +286,19 @@ int main(int argc, char *argv[])
   /* variables for the resampler */
   double inrate, outrate, phase, bwidth, prec, OLEN;
   double *inp, *out;
+  char ibuf[PS];
+  short *sptr;
+  int *iptr;
+  float *fptr;
+  double *dptr;
   int32_t *iout;
-  int verbose, optc, fd, out32;
-  long intotal = 0, outtotal = 0, blen, mlen, check, i, nch;
+  int verbose, optc, fd, out32, bpf, bits;
+  long intotal = 0, outtotal = 0, blen, mlen, check, i, nch, nfid;
   soxr_t soxr;
   soxr_error_t error;
   size_t indone, outdone;
   /* variables for optional input from sound file/shared memory */ 
-  char *fnam, *memname;
+  char *fnam, *memname, *nfinfo;
   struct stat sb;
   sf_count_t start, until, total;
   SNDFILE *sndfile=NULL;
@@ -294,6 +309,7 @@ int main(int argc, char *argv[])
   int delay, ndelay, change;
   long fadinglength, fadecount=-1;
   char *pnam;
+  struct nfrec *nfr;
   for(i=0; i<1024; carry[i] = 0.0, i++);
 
   if (argc == 1) {
@@ -316,6 +332,8 @@ int main(int argc, char *argv[])
       {"channels", required_argument, 0, 'c' },
       {"file", required_argument, 0, 'f' },
       {"shmname", required_argument, 0, 'm' },
+      {"nfinfo", required_argument, 0, 'M' },
+      {"nfid", required_argument, 0, 'N' },
       {"start", required_argument, 0, 's' },
       {"until", required_argument, 0, 'u' },
       {"number-frames", required_argument, 0, 'n' },
@@ -337,6 +355,11 @@ int main(int argc, char *argv[])
   blen = 8192;
   fnam = NULL;
   memname = NULL;
+  nfinfo = NULL;
+  nfr = NULL;
+  bpf = 0;
+  bits = 0;
+  nfid = -2;
   start = 0;
   until = 0;
   total = 0;
@@ -348,7 +371,7 @@ int main(int argc, char *argv[])
   pnam = NULL;
   verbose = 0;
   while ((optc = getopt_long(argc, argv, 
-          "i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:b:IpVh",
+          "M:N:i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:b:IpVh",
           longoptions, &optind)) != -1) {
       switch (optc) {
       case 'v':
@@ -400,6 +423,12 @@ int main(int argc, char *argv[])
         break;
       case 'm':
         memname = strdup(optarg);
+        break;
+      case 'M':
+        nfinfo = strdup(optarg);
+        break;
+      case 'N':
+        nfid = atoi(optarg);
         break;
       case 'd':
         delay = atoi(optarg);
@@ -475,7 +504,26 @@ int main(int argc, char *argv[])
                   "(%s)\n", sf_strerror(NULL));
           exit(7);
       }
-  }  
+  } else if (nfinfo != NULL) {
+      nfr = nfopen(nfinfo, nfid, O_RDONLY, 0);
+      if (nfr == NULL) {
+          fprintf(stderr, "resample_soxr: cannot open nf file: %s id=%ld.",
+                 nfinfo, nfid);
+          exit(15);
+      }
+      inrate = nfr->info1;
+      bits = nfr->info2;
+      if (bits == 16) bpf = 4;
+      else bpf = 8;
+      if (start != 0) {
+          nfclose();
+          nfr = nfopen(nfinfo, nfid, O_RDONLY, start*bpf);
+      }
+      if (total == 0) total = (nfr->length)/bpf - start;
+      if ((start + total)*bpf > nfr->length) total = (nfr->length)/bpf - start;
+      blen = PS/bpf;
+  }
+
   if (sndfile) { 
       /* seek to start */
       if (start != 0 && sfinfo.seekable) {
@@ -493,7 +541,7 @@ int main(int argc, char *argv[])
       inrate = (double)(sfinfo.samplerate);
   } else {
       /* no seeking in stdin, ignore those arguments */
-      total = 0;
+      if (!nfinfo) total = 0;
   }
 
   if (verbose) {
@@ -535,8 +583,8 @@ int main(int argc, char *argv[])
     fflush(stderr);
     exit(1);
   }
-     
-  /* we read from stdin or file/shared mem until eof and write to stdout */
+
+  /* we read from stdin or file/shared mem/nf file until eof or total (if >0) and write to stdout */
   while (1) {
     mlen = blen;
     if (total != 0) {
@@ -549,6 +597,25 @@ int main(int argc, char *argv[])
     memclean((char*)inp, nch*sizeof(double)*mlen);
     if (sndfile) 
         mlen = sf_readf_double(sndfile, inp, mlen);
+    else if (nfinfo) {
+        if (mlen == blen) {
+             memclean((char*)ibuf, PS);
+             mlen = nfreadpage((void*)ibuf)/bpf;
+        }
+        if (bpf==4) {
+             for (sptr = (short*)ibuf, dptr = inp, i=0; i<2*mlen; 
+                  i++, sptr++, dptr++)
+                *dptr = (double)(*sptr)/32768.0;
+        } else if (bits == 28) {
+             for (fptr = (float*)ibuf, dptr = inp, i=0; i<2*mlen; 
+                  i++, fptr++, dptr++)
+                *dptr = (double)(*fptr);
+        } else {
+             for (iptr = (int*)ibuf, dptr = inp, i=0; i<2*mlen; 
+                  i++, iptr++, dptr++)
+                *dptr = (double)(*iptr)/2147483648.0;
+        }
+    }       
     else
         mlen = fread((void*)inp, nch*sizeof(double), mlen, stdin);
     if (mlen == 0) { 
@@ -610,7 +677,7 @@ int main(int argc, char *argv[])
         memclean((char*)iout, nch*sizeof(int32_t)*outdone);
         for (i=0; i<nch*outdone; i++)
             iout[i] = (int32_t) (out[i] * 2147483647);
-        refreshmem((char*)iout, nch*sizeof(int32_t)*outdone)
+        refreshmem((char*)iout, nch*sizeof(int32_t)*outdone);
         check = fwrite((void*)iout, nch*sizeof(int32_t), outdone, stdout);
     } else {
         check = fwrite((void*)out, nch*sizeof(double), outdone, stdout);

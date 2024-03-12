@@ -2,6 +2,11 @@
 
 0.8 to 0.9
 
+- introduced nf files for storing (music) data directly in block device
+  (e.g., SD card or other flash device) without any file system overhead.
+  Created with music2nf (in "improvefile" quality) and can be used with
+  writeloop or resample_soxr.
+
 - fixed a problem with using assembler code for refreshing memory
   on x86_64 and aarch64.
 

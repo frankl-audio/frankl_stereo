@@ -282,12 +282,12 @@ void usage( ) {
 
 int main(int argc, char *argv[])
 {
-    int sfd, s, moreinput, err, verbose, nrchannels, startcount, sumavg,
-        stripped, innetbufsize, dobufstats, countdelay, maxbad, nrrefs;
-    long blen, hlen, ilen, olen, extra, loopspersec, nrdelays, sleep,
-         nsec, count, wnext, badloops, badreads, readmissing, avgav, checkav;
+    int sfd, verbose, nrchannels, startcount,
+        stripped, innetbufsize;
+    long blen, ilen, olen, extra, loopspersec, nrdelays, sleep,
+         nsec, count, badloops, badreads, readmissing, avgav, checkav;
     long long icount, ocount, badframes;
-    void *buf, *iptr, *optr, *max;
+    void *buf, *iptr;
     struct timespec mtime;
     double looperr, extraerr, extrabps, morebps;
     snd_pcm_t *pcm_handle;
@@ -365,16 +365,13 @@ int main(int argc, char *argv[])
     nrchannels = 2;
     access = SND_PCM_ACCESS_RW_INTERLEAVED;
     extrabps = 0;
-    nrrefs = 3;
     sleep = 0;
-    maxbad = 4;
     nonblock = 0;
     innetbufsize = 0;
+    count = 0;
     corr = 0;
     verbose = 0;
     stripped = 0;
-    dobufstats = 1;
-    countdelay = 1;
     while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:R:e:m:K:o:NFXO:vyjVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
@@ -392,9 +389,6 @@ int main(int argc, char *argv[])
           break;
         case 'i':
           ilen = atoi(optarg);
-          break;
-        case 'R':
-          nrrefs = atoi(optarg);
           break;
         case 'n':
           loopspersec = atoi(optarg);
@@ -441,9 +435,6 @@ int main(int argc, char *argv[])
         case 'D':
           sleep = atoi(optarg);
           break;
-        case 'm':
-          maxbad = atoi(optarg);
-          break;
         case 'K':
           innetbufsize = atoi(optarg);
           if (innetbufsize != 0 && innetbufsize < 128)
@@ -465,12 +456,6 @@ int main(int argc, char *argv[])
           break;
         case 'X':
           stripped = 1;
-          break;
-        case 'y':
-          dobufstats = 0;
-          break;
-        case 'j':
-          countdelay = 0;
           break;
         case 'V':
           fprintf(stderr,
@@ -515,12 +500,10 @@ int main(int argc, char *argv[])
     if (blen < 3*ilen) {
         blen = 3*ilen;
     }
-    hlen = blen/2;
     if (olen*loopspersec == rate)
         looperr = 0.0;
     else
         looperr = (1.0*rate)/loopspersec - 1.0*olen;
-    moreinput = 1;
     icount = 0;
     ocount = 0;
     /* for mmap try to set hwbuffer to multiple of output per loop */
@@ -540,10 +523,8 @@ int main(int argc, char *argv[])
     }
     /* we put some overlap before the reference pointer */
     buf = buf + (olen+extra)*bytesperframe;
-    max = buf + blen;
     /* the pointers for next input and next output */
     iptr = buf;
-    optr = buf;
 
     /* setup network connection */
     if (host != NULL && port != NULL) {
@@ -662,7 +643,7 @@ int main(int argc, char *argv[])
              /* also semaphore for write lock */
              tmpnames[i-optind] = (char*)calloc(strlen(argv[i])+5, 1);
              strncpy(tmpnames[i-optind], fnames[i-optind], strlen(argv[i]));
-             strncat(tmpnames[i-optind], ".TMP", 4);
+             strncat(tmpnames[i-optind], ".TMP", 5);
              if ((semsw[i-optind] = sem_open(tmpnames[i-optind], O_RDWR))
                                                            == SEM_FAILED) {
                  fprintf(stderr, "playhrt: Cannot open write semaphore %s: %s.\n",tmpnames[i-optind],strerror(errno));
@@ -761,6 +742,7 @@ int main(int argc, char *argv[])
              snd_pcm_mmap_begin(pcm_handle, &areas, &offset, &frames);
              ilen = frames * bytesperframe;
              iptr = areas[0].addr + offset * bytesperframe;
+             memclean((char*)iptr, ilen);
              memcpy((void*)iptr, (void*)ptr, ilen);
              sz += ilen;
              ptr += ilen;
@@ -769,7 +751,7 @@ int main(int argc, char *argv[])
                mtime.tv_nsec -= 1000000000;
                mtime.tv_sec++;
              }
-             refreshmems(iptr, ilen, nrrefs);
+             refreshmem(iptr, ilen);
              clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
              snd_pcm_mmap_commit(pcm_handle, offset, frames);
              count++;

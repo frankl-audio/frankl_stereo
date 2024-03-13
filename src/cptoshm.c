@@ -54,6 +54,11 @@ void usage( ) {
 "      If input is stdin then this  option must be given but may be\n"
 "      larger than the actual input.\n"
 "\n"
+"  --number-copies=intnum, -R intnum\n"
+"      before writing data they are copied the specfied number of\n"
+"      times to a cleaned temporary buffer in RAM and then back to the \n"
+"      cleaned original buffer. The default is 0. \n"
+"\n"
 "  --verbose, -v\n"
 "      print some information during startup and operation.\n"
 "\n"
@@ -78,10 +83,11 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     char *infile, *memname;
-    int ifd, fd, bufsize, optc, verbose;
+    int ifd, fd, bufsize, optc, i, nrcp, verbose;
     size_t length, done, rlen;
     struct stat sb;
-    char *buf, *mem, *ptr;
+    char *mem, *ptr;
+    void *buf, *tbuf;
 
     /* read command line options */
     static struct option longoptions[] = {
@@ -89,6 +95,7 @@ int main(int argc, char *argv[])
         {"shmname", required_argument, 0, 'o' },
         {"buffer-size", required_argument, 0,  'b' },
         {"max-input", required_argument, 0, 'm' },
+        {"number-copies", required_argument, 0, 'R' },
         {"overwrite", required_argument, 0, 'O' }, /* ignored */
         {"verbose", no_argument, 0, 'v' },
         {"version", no_argument, 0, 'V' },
@@ -105,9 +112,10 @@ int main(int argc, char *argv[])
     ifd = 0; /* stdin */
     fd = -1;
     length = 0;
+    nrcp = 0;
     verbose = 0;
     infile = NULL;
-    while ((optc = getopt_long(argc, argv, "i:o:b:m:O:vVh",
+    while ((optc = getopt_long(argc, argv, "i:o:b:m:O:R:vVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'i':
@@ -138,6 +146,10 @@ int main(int argc, char *argv[])
         case 'm':
           length = atoi(optarg);
           break;
+        case 'R':
+          nrcp = atoi(optarg);
+          if (nrcp < 0 || nrcp > 1000) nrcp = 0;
+          break;
         case 'O':
           break;
         case 'v':
@@ -161,7 +173,8 @@ int main(int argc, char *argv[])
                 "cptoshm: input from %s, shared mem is %s, max length %ld\n",
                 infile, memname, (long)length);
     }
-    if (! (buf = malloc(bufsize)) ) {
+    buf = NULL;
+    if (posix_memalign(&buf, 4096, bufsize)) {
         fprintf(stderr, "cptoshm: Cannot allocate buffer of length %ld.\n",
                         (long)bufsize);
         exit(1);
@@ -175,6 +188,15 @@ int main(int argc, char *argv[])
         fprintf(stderr, "cptoshm: Cannot map shared memory.\n");
         exit(6);
     }
+    tbuf = NULL;
+    if (nrcp) {
+        if (posix_memalign(&tbuf, 4096, bufsize)) {
+            fprintf(stderr, "cptoshm: Cannot allocate buffer of length %ld.\n",
+                            (long)bufsize);
+            exit(2);
+        }
+    }
+        
     /* clear memory */
     if (verbose) {
         fprintf(stderr, "cptoshm: clearing memory ... ");
@@ -191,6 +213,12 @@ int main(int argc, char *argv[])
         rlen = read(ifd, buf, bufsize);
         rlen = (done+rlen > length)? length-done:rlen;
         if (rlen == 0) break;
+        for (i=nrcp;  i; i--) {
+            memclean(tbuf, rlen);
+            cprefresh(tbuf, buf, rlen);
+            memclean(buf, rlen);
+            cprefresh(buf, tbuf, rlen);
+        }
         memclean(ptr, rlen);
         memcpy(ptr, buf, rlen);
         refreshmem(ptr, rlen);

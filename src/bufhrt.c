@@ -27,6 +27,8 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 #include <semaphore.h>
 #include "cprefresh.h"
 
+#define TBUF 134217728 /* 2^27 */
+
 /* help page */
 /* vim hint to remove resp. add quotes:
       s/^"\(.*\)\\n"$/\1/
@@ -135,6 +137,13 @@ void usage( ) {
 "      the buffer content is written out in a sleep-write loop (without\n"
 "      reading input). See below for an example.\n"
 "\n"
+"  --number-copies=intnum, -R intnum\n"
+"      this option is only used in --interval mode which was mentioned before.\n"
+"      Before writing out data they are copied the specfied number of\n"
+"      times to a cleaned temporary buffer in RAM and then back to the \n"
+"      cleaned original buffer. The default is 0. This option may improve \n"
+"      sound quality in applications like 'improvefile' (see example script).\n"
+"  \n"
 "  --dsyncs-per-second=intval, -D intval\n"
 "      in interval mode data of output file will be transfered to storage\n"
 "      hardware with this frequency. Sensible values depend on hardware, can\n"
@@ -181,8 +190,9 @@ void usage( ) {
 "  copies of a music file on the same disk can sound differently . . .):\n"
 "\n"
 "  bufhrt --interval --file music.flac --outfile=music_better.flac \\\n"
-"         --buffer-size=536870912 --loops-per-second=2000 \\\n"
-"         --bytes-per-second=8192000 --dsyncs-per-second=100\n"
+"         --buffer-size=536870912 --loops-per-second=1024 \\\n"
+"         --bytes-per-second=8290304 --number-copies=32 \\\n"
+"         --dsyncs-per-second=32\n"
 "\n"
 "  And here is an example how 'bufhrt' can work together with 'writeloop'\n"
 "  (note that the memory file size is 6 * 1536, 6 times the data to be\n"
@@ -202,14 +212,14 @@ int main(int argc, char *argv[])
 {
     struct sockaddr_in serv_addr;
     int listenfd, connfd, ifd, s, moreinput, optval=1, verbose, rate,
-        bytesperframe, optc, interval, shared, innetbufsize,
+        bytesperframe, optc, interval, shared, innetbufsize, nrcp,
         outnetbufsize, dsync;
     long blen, hlen, ilen, olen, outpersec, loopspersec, nsec, count, wnext,
          badreads, badreadbytes, badwrites, badwritebytes, lcount, 
-         dcount, dsyncfreq;
+         dcount, dsyncfreq, fsize, e, a;
     long long icount, ocount;
     void *buf, *iptr, *optr, *max;
-    char *port, *inhost, *inport, *outfile, *infile;
+    char *port, *inhost, *inport, *outfile, *infile, *ptmp, *tbuf;
     struct timespec mtime, mtime1;
     double looperr, extraerr, extrabps, off, dsyncpersec;
     /* variables for shared memory input */
@@ -234,6 +244,7 @@ int main(int argc, char *argv[])
         {"sample-format", required_argument, 0, 'f' },
         {"dsync", no_argument, 0, 'd' },
         {"file", required_argument, 0, 'F' },
+        {"number-copies", required_argument, 0, 'R' },
         {"host-to-read", required_argument, 0, 'H' },
         {"port-to-read", required_argument, 0, 'P' },
         {"stdin", no_argument, 0, 'S' },
@@ -274,10 +285,11 @@ int main(int argc, char *argv[])
     shared = 0;
     interval = 0;
     extrabps = 0.0;
+    nrcp = 0;
     innetbufsize = 0;
     outnetbufsize = 0;
     verbose = 0;
-    while ((optc = getopt_long(argc, argv, "p:o:b:i:D:n:m:s:f:F:H:P:e:vVhd",
+    while ((optc = getopt_long(argc, argv, "p:o:b:i:D:n:m:s:f:F:R:H:P:e:vVhd",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'p':
@@ -303,6 +315,10 @@ int main(int argc, char *argv[])
           break;
         case 's':
           rate = atoi(optarg);
+          break;
+        case 'R':
+          nrcp = atoi(optarg);
+          if (nrcp < 0 || nrcp > 1000) nrcp = 0;
           break;
         case 'f':
           if (strcmp(optarg, "S16_LE")==0) {
@@ -368,7 +384,7 @@ int main(int argc, char *argv[])
     }
     /* check some arguments, open files and set some parameters */
     if (outfile) {
-        connfd = open(outfile, O_WRONLY | O_CREAT, 00644);
+        connfd = open(outfile, O_WRONLY | O_CREAT | O_NOATIME, 00644);
         if (connfd == -1) {
             fprintf(stderr, "bufhrt: Cannot open output file %s.\n   %s\n",
                              outfile, strerror(errno));
@@ -376,7 +392,7 @@ int main(int argc, char *argv[])
         }
     }
     if (infile) {
-        if ((ifd = open(infile, O_RDONLY)) == -1) {
+        if ((ifd = open(infile, O_RDONLY | O_NOATIME)) == -1) {
             fprintf(stderr, "bufhrt: Cannot open input file %s: %s.\n", 
                             infile, strerror(errno));
             exit(2);
@@ -658,6 +674,12 @@ int main(int argc, char *argv[])
 
     /* interval mode */
     if (interval) {
+       tbuf = NULL;
+       if (nrcp > 0) {
+           /* page size aligned temporary buffer */
+           ptmp = (char *)malloc(TBUF+4096);
+           for (tbuf = ptmp; (long)tbuf % 4096 != 0; tbuf++);
+       }
        count = 0;
        /* counter for fdatasync */
        dcount = 0;
@@ -677,6 +699,20 @@ int main(int argc, char *argv[])
                   break;
               }
               iptr += s;
+          }
+
+          /* maybe make refreshed copies */
+          if (nrcp > 0) {
+              fsize = iptr - buf;
+              for (i=nrcp;  i; i--) {
+                   for (a = 0, e = a+TBUF; a < fsize; a += TBUF, e += TBUF) {
+                       if (e > fsize) e = fsize;
+                       memclean(tbuf, e-a);
+                       cprefresh(tbuf, buf+a, e-a);
+                       memclean(buf+a, e-a);
+                       cprefresh(buf+a, tbuf, e-a);
+                   }
+              }
           }
 
           /* write out */

@@ -1,0 +1,49 @@
+#!/bin/bash 
+
+#########################################################################
+##  frankl (C) 2015              play_resample
+##
+##  See README or http://frank_l.bitbucket.org/stereoutils/player.html
+##  for explanations.
+#########################################################################
+
+# HDMI
+#CARD="hw:0,3"
+# speakers
+CARD="hw:0,0"
+EXTRABYTESPLAY=0
+SAMPLERATE=48000
+VERBOSE=""
+VERBOSE="--verbose --verbose"
+
+trap "trap - SIGTERM && kill -- -$$ " SIGINT SIGTERM EXIT
+
+cptoshm --file="$1" --shmname=/play.flac --buffer-size=67108864 --number-copies=16
+
+rm -f /dev/shm/bl{1,2,3} /dev/shm/sem.bl{1,2,3}* 
+
+if ! test -e /cache/VOLRACE ; then
+  echo "0.6 4 0.75" > /cache/VOLRACE
+fi
+
+resample_soxr --shmname=/play.flac --param-file=/cache/VOLRACE \
+           --outrate=${SAMPLERATE}  --fading-length=100000 --toint32 |
+      writeloop --block-size=1024 --file-size=4096 --shared /bl1 /bl2 /bl3 &
+
+# allow some startup time for background command
+sleep 0.5
+
+# pasuspender can be useful when a pulseaudio server is running
+catloop --block-size=1024 --shared /bl1 /bl2 /bl3 | \
+    pasuspender -- playhrt \
+           --stdin \
+           --device=${CARD} \
+           --sample-rate=${SAMPLERATE} \
+           --sample-format=S32_LE \
+           --loops-per-second=1000 \
+           --mmap \
+           --non-blocking-write \
+           ${VERBOSE} \
+           --extra-bytes-per-second=${EXTRABYTESPLAY} \
+           --hw-buffer=8192
+

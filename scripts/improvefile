@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #########################################################################
-##  frankl (C) 2015
+##  frankl (C) 2015-2024
 ##  
 ##  USAGE:
 ##    improvefile <orig> <new>
@@ -19,30 +19,26 @@ fi
 ##  This utility is mainly meant for music files (and maybe certain filter and
 ##  program files for music playback).
 
-## Hint: you may also use the new program 'cleancp' instead of this script
+##  With these example parameters the output file will be written
+##  with 8 MB/sec. These will be written in 1024 loops, that is
+##  8 kB per loop. And 32 times per second (after every 32 loops)
+##  the written data will be synced to the media containing the file.
+##  Before the output of data they will be written 16 times to 
+##  a cleared temporary buffer and then back to the cleared original
+##  buffer.
 
-bufhrt --file="$1" --outfile="$2" --buffer-size=536870912 \
-       --loops-per-second=2000 --bytes-per-second=8192000 \
-       --dsyncs-per-second=100 --interval 
+bufhrt --interval --file music.flac --outfile=music_better.flac \
+       --buffer-size=536870912 --loops-per-second=1024 \
+       --bytes-per-second=8290304 --number-copies=16 \
+       --dsyncs-per-second=32
 
-
-# older variant with --dsync 
-##  For testing you may add the '--verbose' option. If there are more 
-##  than a few dozen "bufhrt: delayed block xxxx" messages on an album
-##  then reduce the value of the '--loops-per-second' parameter.
-##  
-##  You may also experiment with the '--bytes-per-second' value. Larger values
-##  make the process faster. Lower values may lead to even better audible
-##  results. But this needs to be tested in the individual setups.
-##  
-##  If you have enough RAM you may enlarge the value of the
-##  '--buffer-size' argument to something larger than the size
-##  of the biggest files you want to improve.
-
-#bufhrt --file="$1" --dsync --outfile="$2" --buffer-size=50000000 \
-#       --loops-per-second=100 --bytes-per-second=3276800 --interval 
-
-# setting in version 0.8, often probably too many loops
-#bufhrt --file="$1" --dsync --outfile="$2" --buffer-size=50000000 \
-#       --loops-per-second=2000 --bytes-per-second=6144000 --interval 
-
+##  You may experiment with these parameters. 
+##  On a very fast medium higher --dsyncs-per-second may work.
+##  Larger values for --number-copies need more time but may result
+##  in better sound quality.
+##  For best results you should reduce the --bytes-per-second, very good
+##  results on some flash cards (CF, SD) were achieved with low values
+##  like 131072 - of course this takes a long time.
+##  It can be sensible (but is not needed) that the --bytes-per-second 
+##  are divisible --loops-per-second and that the number of bytes written 
+##  per loop is a multiple of 512 (the usual block size on flash cards, SSDs).

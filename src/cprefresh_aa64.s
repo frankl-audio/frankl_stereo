@@ -1,4 +1,14 @@
+/*
+  This code is the result of lengthy experiments.
+    - we prefer store and load over various bit operations (e.g., even
+      number of xor)
+    - loading from zero register zxr is better than loading literal #0
+    - the difference between using an x?? register over a d?? register
+      is small, we prefer the latter
+    - we prefer to zero a register before writing data to it
+*/
 
+/* refresh data in place */
 	.arch armv8-a
 	.text
 	.align	2
@@ -8,24 +18,153 @@ refreshmem_aa64:
 	.cfi_startproc
         mov     x4, x0
         mov     x5, #1
-        mov     x7, xzr
-        mvn     x7, x7
 .LOOP:
         cmp     x1, x5
         blt     .RET
-        ldr     x3, [x4]
-        eor     x3, x3, x7
-        eor     x3, x3, x7
-        eor     x3, x3, x7
-        str     x3, [x4]
-        eor     x3, x3, x7
-        eor     x3, x3, x7
-        eor     x3, x3, x7
-        str     x3, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
         add     x4, x4, 8
         add     x5, x5, 1
         b       .LOOP
 .RET:
+        ret
+	.cfi_endproc
+
+
+
+/* similar, but writing to different location */
+	.text
+	.align	2
+	.global	cprefresh_aa64
+	.type	cprefresh_aa64, %function
+cprefresh_aa64:
+	.cfi_startproc
+        mov     x4, x0
+        mov     x6, x2
+        mov     x5, #1
+.CLOOP:
+        cmp     x1, x5
+        blt     .CRET
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x6]
+        str     d11, [x6]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x6]
+        str     xzr, [x6]
+        str     d11, [x6]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x6]
+        str     xzr, [x6]
+        str     d11, [x6]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x6]
+        str     xzr, [x6]
+        str     d11, [x6]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x6]
+        str     xzr, [x6]
+        str     d11, [x6]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x6]
+        str     xzr, [x6]
+        str     d11, [x6]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x6]
+        str     xzr, [x6]
+        str     d11, [x6]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x6]
+        str     xzr, [x6]
+        str     d11, [x6]
+        add     x4, x4, 8
+        add     x6, x6, 8
+        add     x5, x5, 1
+        b       .CLOOP
+.CRET:
+        ret
+	.cfi_endproc
+
+
+/* similar, but zero and clean the interval */
+	.text
+	.align	2
+	.global	memclean_aa64
+	.type	memclean_aa64, %function
+memclean_aa64:
+	.cfi_startproc
+        mov     x4, x0
+        mov     x5, #1
+.MLOOP:
+        cmp     x1, x5
+        blt     .MRET
+        str     xzr, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        orr     v11.8b, v11.8b, v11.8b
+        ldr     d11, [x4]
+        str     xzr, [x4]
+        str     d11, [x4]
+        add     x4, x4, 8
+        add     x5, x5, 1
+        b       .MLOOP
+.MRET:
         ret
 	.cfi_endproc
 

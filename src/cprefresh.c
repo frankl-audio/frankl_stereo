@@ -95,11 +95,13 @@ inline void cprefresh(char* dest, char* ptr, long n)
 #else
 #ifdef REFRESHAA64
 #include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 /* n is number of 8 byte quad words */
 inline void refreshmem_aa64(void* addr, int n);
-/* same with k iterations */
-inline void refreshmems_aa64(void* addr, int n, int k);
+inline void memclean_aa64(void* addr, int n);
+inline void cprefresh_aa64(void* addr, int n, void* dest);
 
 /* nb is number of bytes */
 inline void refreshmem(char* ptr, long nb) {
@@ -114,9 +116,9 @@ inline void refreshmem(char* ptr, long nb) {
   n = (nb-off)/8;
   refreshmem_aa64(vp, n);
 }
-/* k iterations */
+
 inline void refreshmems(char* ptr, long nb, long k) {
-  long n, off;
+  long n, off, j;
   void *vp;
   off = (long)ptr % 8;
   if (off != 0){
@@ -125,23 +127,40 @@ inline void refreshmems(char* ptr, long nb, long k) {
      vp = (void*)ptr;
   }
   n = (nb-off)/8;
-  refreshmems_aa64(vp, n, k);
+  for(j=k; j; j--)
+      refreshmem_aa64(vp, n);
 }
 
-inline void memclean(char* ptr, long nb)
+inline void memclean(char* ptr, int n)
 {
-  long i;
-  for (i=0; i < nb; i++)
-      ptr[i] = 0;
-  refreshmem(ptr, nb);
+  int i, off, n0;
+  off = (unsigned long)ptr % 8;
+  if (off > 0) {
+    off = 8-off;
+    for (i=0; i < off; i++) ptr[i] = 0;
+  }
+  n0 = (n-off)/8;
+  memclean_aa64((void*)(ptr+off), n0);
+  n0 *= 8;
+  for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
 inline void cprefresh(char* dest, char* ptr, long n)
 {
-  memclean(dest, n);
-  memcpy(dest, ptr, n);
-  refreshmem(dest, n);
+  int n0;
+  if (((unsigned long)ptr % 8) != 0 || ((unsigned long)dest % 8) != 0) {
+      memclean(dest, n);
+      memcpy(dest, ptr, n);
+      refreshmem(dest, n);
+  } else {
+      /* both pointers must get 8-byte aligned */
+      n0 = n/8;
+      cprefresh_aa64((void*)ptr, n0, (void*)dest);
+      n0 *= 8;
+      for (; n0 < n; n0++) dest[n0] = ptr[n0];
+  }
 }
+
 #else
 #ifdef REFRESHX8664
 #include <stdint.h>

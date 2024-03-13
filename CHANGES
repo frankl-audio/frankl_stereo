@@ -2,6 +2,15 @@
 
 0.8 to 0.9
 
+- new example script play_resample.
+
+- new default parameters and some explanation in example script
+  improvefile
+
+- improved assembler code for refreshing memory on AA64.
+
+- added options --number-copies for "improve in RAM" for bufhrt, cptoshm.
+
 - introduced nf files for storing (music) data directly in block device
   (e.g., SD card or other flash device) without any file system overhead.
   Created with music2nf (in "improvefile" quality) and can be used with

@@ -27,7 +27,7 @@ fi
 ##  a cleared temporary buffer and then back to the cleared original
 ##  buffer.
 
-bufhrt --interval --file music.flac --outfile=music_better.flac \
+bufhrt --interval --file $1 --outfile=$2 \
        --buffer-size=536870912 --loops-per-second=1024 \
        --bytes-per-second=8290304 --number-copies=16 \
        --dsyncs-per-second=32

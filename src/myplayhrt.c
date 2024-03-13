@@ -451,6 +451,10 @@ int main(int argc, char *argv[])
           break;
         case 'O':
           break;
+        case 'j':
+          break;
+        case 'y':
+          break;
         case 'v':
           verbose += 1;
           break;
@@ -468,6 +472,7 @@ int main(int argc, char *argv[])
           exit(0);
         default:
           usage();
+          fprintf(stderr, "BAD option: %c\n",optc);
           exit(2);
         }
     }

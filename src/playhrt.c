@@ -764,6 +764,7 @@ int main(int argc, char *argv[])
           snd_pcm_mmap_begin(pcm_handle, &areas, &offset, &frames);
           ilen = frames * bytesperframe;
           iptr = areas[0].addr + offset * bytesperframe;
+          memclean(iptr, ilen);
           s = read(sfd, iptr, ilen);
           mtime.tv_nsec += nsec;
           if (mtime.tv_nsec > 999999999) {
@@ -784,6 +785,7 @@ int main(int argc, char *argv[])
           snd_pcm_mmap_begin(pcm_handle, &areas, &offset, &frames);
           ilen = frames * bytesperframe;
           iptr = areas[0].addr + offset * bytesperframe;
+          memclean(iptr, ilen);
           s = read(sfd, iptr, ilen);
           mtime.tv_nsec += nsec;
           if (mtime.tv_nsec > 999999999) {
@@ -818,6 +820,7 @@ int main(int argc, char *argv[])
           snd_pcm_mmap_begin(pcm_handle, &areas, &offset, &frames);
           ilen = frames * bytesperframe;
           iptr = areas[0].addr + offset * bytesperframe;
+          memclean(iptr, ilen);
           s = read(sfd, iptr, ilen);
           mtime.tv_nsec += nsec;
           if (mtime.tv_nsec > 999999999) {
@@ -905,7 +908,8 @@ int main(int argc, char *argv[])
 
           ilen = frames * bytesperframe;
           iptr = areas[0].addr + offset * bytesperframe;
-          /*memclean(iptr, ilen);  commented out to save some CPU-time */
+          memclean(iptr, ilen);
+          /* these memclean may be  commented out to save some CPU-time */
           /* in --mmap mode we read directly into mmaped space without internal buffer */
           s = read(sfd, iptr, ilen);
 

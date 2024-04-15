@@ -144,6 +144,12 @@ void usage( ) {
 "      cleaned original buffer. The default is 0. This option may improve \n"
 "      sound quality in applications like 'improvefile' (see example script).\n"
 "  \n"
+"  --ram-loops-per-second=intnum, -X intnum\n"
+"  --ram-bytes-per-second=intnum, -Y intnum\n"
+"      by default the copies in RAM specified by the previous option \n"
+"      --number-copies are written as fast as possible. Optionally these two\n"
+"      options can be used for slower copy loops with timing.\n"
+"\n"
 "  --dsyncs-per-second=intval, -D intval\n"
 "      in interval mode data of output file will be transfered to storage\n"
 "      hardware with this frequency. Sensible values depend on hardware, can\n"
@@ -216,7 +222,7 @@ int main(int argc, char *argv[])
         outnetbufsize, dsync;
     long blen, hlen, ilen, olen, outpersec, loopspersec, nsec, count, wnext,
          badreads, badreadbytes, badwrites, badwritebytes, lcount, 
-         dcount, dsyncfreq, fsize, e, a;
+         dcount, dsyncfreq, fsize, e, a, rambps, ramlps, ramtime, ramchunk;
     long long icount, ocount;
     void *buf, *iptr, *optr, *max;
     char *port, *inhost, *inport, *outfile, *infile, *ptmp, *tbuf;
@@ -239,6 +245,8 @@ int main(int argc, char *argv[])
         {"input-size",  required_argument, 0, 'i'},
         {"loops-per-second", required_argument, 0,  'n' },
         {"bytes-per-second", required_argument, 0,  'm' },
+        {"ram-loops-per-second", required_argument, 0,  'X' },
+        {"ram-bytes-per-second", required_argument, 0,  'Y' },
         {"dsyncs-per-second", required_argument, 0,  'D' },
         {"sample-rate", required_argument, 0,  's' },
         {"sample-format", required_argument, 0, 'f' },
@@ -277,6 +285,10 @@ int main(int argc, char *argv[])
     ilen = 0;
     loopspersec = 1000;
     outpersec = 0;
+    ramlps = 0;
+    rambps = 0;
+    ramtime = 0;
+    ramchunk = 0;
     rate = 0;
     bytesperframe = 0;
     inhost = NULL;
@@ -289,7 +301,7 @@ int main(int argc, char *argv[])
     innetbufsize = 0;
     outnetbufsize = 0;
     verbose = 0;
-    while ((optc = getopt_long(argc, argv, "p:o:b:i:D:n:m:s:f:F:R:H:P:e:vVhd",
+    while ((optc = getopt_long(argc, argv, "p:o:b:i:D:n:m:X:Y:s:f:F:R:H:P:e:vVhd",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'p':
@@ -313,6 +325,12 @@ int main(int argc, char *argv[])
         case 'm':
           outpersec = atoi(optarg);
           break;
+        case 'X':
+           ramlps = atoi(optarg);
+           break;
+        case 'Y':
+           rambps = atoi(optarg);
+           break;
         case 's':
           rate = atoi(optarg);
           break;
@@ -418,6 +436,12 @@ int main(int argc, char *argv[])
                         innetbufsize);
                 exit(23);
         }
+    }
+    if (ramlps != 0 && rambps != 0) {
+        ramtime = 1000000000/ramlps;
+        ramchunk = rambps/ramlps;
+        while (ramchunk % 16 != 0) ramchunk++;
+        if (ramchunk > TBUF) ramchunk = TBUF;
     }
     if (verbose) {
        fprintf(stderr, "bufhrt: Writing %ld", outpersec);
@@ -702,7 +726,28 @@ int main(int argc, char *argv[])
           }
 
           /* maybe make refreshed copies */
-          if (nrcp > 0) {
+          if (nrcp > 0 && ramchunk > 0) {
+              fsize = iptr - buf;
+              for (i=nrcp;  i; i--) {
+                   clock_gettime(CLOCK_MONOTONIC, &mtime);
+                   for (a = 0, e = a+ramchunk; a < fsize; a += ramchunk, 
+                                                          e += ramchunk) {
+                       if (e > fsize) e = fsize;
+                       mtime.tv_nsec += ramtime;
+                       if (mtime.tv_nsec > 999999999) {
+                         mtime.tv_nsec -= 1000000000;
+                         mtime.tv_sec++;
+                       }
+                       while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
+                                                       &mtime, NULL) != 0) ;
+                       memclean(tbuf, e-a);
+                       cprefresh(tbuf, buf+a, e-a);
+                       memclean(buf+a, e-a);
+                       cprefresh(buf+a, tbuf, e-a);
+                   }
+              }
+          }
+          if (nrcp > 0 && ramchunk == 0) {
               fsize = iptr - buf;
               for (i=nrcp;  i; i--) {
                    for (a = 0, e = a+TBUF; a < fsize; a += TBUF, e += TBUF) {

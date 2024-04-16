@@ -169,6 +169,11 @@ void usage( ) {
 "      faster to the sound device). See ADJUSTING SPEED below for\n"
 "      hints. The default is 0.\n"
 "\n"
+"  --number-copies=intnum, -R intnum\n"
+"      before writing data they are copied the specfied number of\n"
+"      times to a cleaned temporary buffer in RAM and then back to the \n"
+"      cleaned original buffer. The default is 0. \n"
+"\n"
 "  --no-delay-stats, -j\n"
 "      disables statistics about delayed loops, see DELAYED LOOPS below.\n"
 "      Only use this after finishing fine tuning of your parameters.\n"
@@ -277,7 +282,7 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     int sfd, verbose, nrchannels, startcount,
-        stripped, innetbufsize, k;
+        stripped, innetbufsize, nrcp, k;
     long blen, ilen, olen, extra, loopspersec, nrdelays, sleep,
          nsec, count, badloops, badreads, readmissing, avgav, checkav;
     long long icount, ocount, badframes;
@@ -319,6 +324,7 @@ int main(int argc, char *argv[])
         {"period-size", required_argument, 0, 'P' },
         {"device", required_argument, 0, 'd' },
         {"extra-bytes-per-second", required_argument, 0, 'e' },
+        {"number-copies", required_argument, 0, 'R' },
         {"sleep", required_argument, 0, 'D' },
         {"max-bad-reads", required_argument, 0, 'm' },
         {"in-net-buffer-size", required_argument, 0, 'K' },
@@ -358,6 +364,7 @@ int main(int argc, char *argv[])
     nrchannels = 2;
     access = SND_PCM_ACCESS_RW_INTERLEAVED;
     extrabps = 0;
+    nrcp = 0;
     sleep = 0;
     nonblock = 0;
     innetbufsize = 0;
@@ -385,6 +392,10 @@ int main(int argc, char *argv[])
           break;
         case 'n':
           loopspersec = atoi(optarg);
+          break;
+        case 'R':
+          nrcp = atoi(optarg);
+          if (nrcp < 0 || nrcp > 1000) nrcp = 0;
           break;
         case 's':
           rate = atoi(optarg);
@@ -749,6 +760,7 @@ int main(int argc, char *argv[])
              iptr = areas[0].addr + offset * bytesperframe;
              /* memclean((char*)iptr, ilen);
              memcpy((void*)iptr, (void*)ptr, ilen); */
+             memclean((char*)iptr, ilen);
              cprefresh((char*)iptr, (char*)ptr, ilen);
              sz += ilen;
              ptr += ilen;
@@ -758,8 +770,10 @@ int main(int argc, char *argv[])
                mtime.tv_sec++;
              }
              /*refreshmem(iptr, ilen); */
-             for (k=16; k; k--) {
+             for (k=nrcp; k; k--) {
+                 memclean((char*)tbuf, ilen);
                  cprefresh((char*)tbuf, (char*)iptr, ilen);
+                 memclean((char*)iptr, ilen);
                  cprefresh((char*)iptr, (char*)tbuf, ilen);
              }
              clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);

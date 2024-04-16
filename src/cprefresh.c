@@ -16,14 +16,14 @@ Optionally, they use assembler functions on ARM.
 inline void memcp_vfpX(void*, void*, int);
 inline void memclean_vfpX(void*, int);
 
-inline void refreshmem(char* ptr, int n)
+inline void refreshmem(char* ptr, long n)
 {
   /* we make shure below that we can access ptr-off */
   int off;
   off = (unsigned int)ptr % 8;
   memcp_vfpX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/8)*8);
 }
-inline void refreshmems(char* ptr, int n, int k)
+inline void refreshmems(char* ptr, long n, int k)
 {
   /* we make shure below that we can access ptr-off */
   int off, j;
@@ -31,7 +31,7 @@ inline void refreshmems(char* ptr, int n, int k)
   for(j=k; j; j--)
       memcp_vfpX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/8)*8);
 }
-inline void memclean(char* ptr, int n)
+inline void memclean(char* ptr, long n)
 {
   int i, off, n0;
   off = (unsigned int)ptr % 8;
@@ -58,14 +58,14 @@ inline void cprefresh(char* dest, char* ptr, long n)
 inline void memcp_regX(void*, void*, int);
 inline void memclean_reg(void*, int);
 
-inline void refreshmem(char* ptr, int n)
+inline void refreshmem(char* ptr, long n)
 {
   /* we make shure below that we can access ptr-off */
   int off;
   off = (unsigned int)ptr % 4;
   memcp_regX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/4)*4);
 }
-inline void refreshmems(char* ptr, int n, int k)
+inline void refreshmems(char* ptr, long n, int k)
 {
   /* we make shure below that we can access ptr-off */
   int off, j;
@@ -73,7 +73,7 @@ inline void refreshmems(char* ptr, int n, int k)
   for(j=k; j; j--)
       memcp_regX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/4)*4);
 }
-inline void memclean(char* ptr, int n)
+inline void memclean(char* ptr, long n)
 {
   int i, off, n0;
   off = (unsigned int)ptr % 4;
@@ -131,7 +131,7 @@ inline void refreshmems(char* ptr, long nb, long k) {
       refreshmem_aa64(vp, n);
 }
 
-inline void memclean(char* ptr, int n)
+inline void memclean(char* ptr, long n)
 {
   int i, off, n0;
   off = (unsigned long)ptr % 8;

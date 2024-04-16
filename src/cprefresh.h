@@ -36,9 +36,9 @@ inline void cprefresh_aa64(void* addr, int n, void* dest);
 
 #endif
 
-inline void refreshmem(char* ptr, int n);
-inline void refreshmems(char* ptr, int n, int k);
-inline void memclean(char* ptr, int n);
+inline void refreshmem(char* ptr, long n);
+inline void refreshmems(char* ptr, long n, int k);
+inline void memclean(char* ptr, long n);
 inline void cprefresh(char* dest, char* ptr, long n);
 
 

@@ -212,12 +212,6 @@ void usage( ) {
 "      it is normal that the first block and one or two blocks at the end\n"
 "      return fewer data).\n"
 "\n"
-"  --number-refreshs=intval, -R intval\n"
-"      the program rewrites its data in place before output, hoping for\n"
-"      a representation in memory that causes less jitter on playback.\n"
-"      The default is to call the procedure 3 times, you may investigate\n"
-"      the effect with different values (higher numbers need more CPU time).\n"
-"\n"
 "  --verbose, -v\n"
 "      print some information during startup and operation.\n"
 "      This option can be given twice for more output about timing\n"
@@ -283,11 +277,11 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     int sfd, verbose, nrchannels, startcount,
-        stripped, innetbufsize;
+        stripped, innetbufsize, k;
     long blen, ilen, olen, extra, loopspersec, nrdelays, sleep,
          nsec, count, badloops, badreads, readmissing, avgav, checkav;
     long long icount, ocount, badframes;
-    void *buf, *iptr;
+    void *buf, *iptr, *tbuf;
     struct timespec mtime;
     double looperr, extraerr, extrabps, morebps;
     snd_pcm_t *pcm_handle;
@@ -333,7 +327,6 @@ int main(int argc, char *argv[])
         {"shared", no_argument, 0, 'F' },
         {"stripped", no_argument, 0, 'X' },
         {"overwrite", required_argument, 0, 'O' },
-        {"number-refreshs", required_argument, 0, 'R' },
         {"verbose", no_argument, 0, 'v' },
         {"no-buf-stats", no_argument, 0, 'y' },
         {"no-delay-stats", no_argument, 0, 'j' },
@@ -501,6 +494,13 @@ int main(int argc, char *argv[])
         if (verbose)
             fprintf(stderr, "playhrt: Setting input chunk size to %ld bytes.\n", ilen);
     }
+    /* temporary buffer */
+    tbuf = NULL;
+    if (posix_memalign(&tbuf, 4096, 2*olen*bytesperframe)) {
+        fprintf(stderr, "myplayhrt: Cannot allocate buffer for cleaning.\n");
+        exit(2);
+    }
+
     /* need big enough input buffer */
     if (blen < 3*ilen) {
         blen = 3*ilen;
@@ -747,8 +747,9 @@ int main(int argc, char *argv[])
              snd_pcm_mmap_begin(pcm_handle, &areas, &offset, &frames);
              ilen = frames * bytesperframe;
              iptr = areas[0].addr + offset * bytesperframe;
-             memclean((char*)iptr, ilen);
-             memcpy((void*)iptr, (void*)ptr, ilen);
+             /* memclean((char*)iptr, ilen);
+             memcpy((void*)iptr, (void*)ptr, ilen); */
+             cprefresh((char*)iptr, (char*)ptr, ilen);
              sz += ilen;
              ptr += ilen;
              mtime.tv_nsec += nsec;
@@ -756,7 +757,11 @@ int main(int argc, char *argv[])
                mtime.tv_nsec -= 1000000000;
                mtime.tv_sec++;
              }
-             refreshmem(iptr, ilen);
+             /*refreshmem(iptr, ilen); */
+             for (k=16; k; k--) {
+                 cprefresh((char*)tbuf, (char*)iptr, ilen);
+                 cprefresh((char*)iptr, (char*)tbuf, ilen);
+             }
              clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
              snd_pcm_mmap_commit(pcm_handle, offset, frames);
              count++;

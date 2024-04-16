@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
           bufsize = atoi(optarg);
           break;
         case 'm':
-          length = atoi(optarg);
+          length = atol(optarg);
           break;
         case 'R':
           nrcp = atoi(optarg);
@@ -197,14 +197,6 @@ int main(int argc, char *argv[])
         }
     }
         
-    /* clear memory */
-    if (verbose) {
-        fprintf(stderr, "cptoshm: clearing memory ... ");
-        fflush(stderr);
-    }
-    memclean(mem, length);
-    if (verbose)
-        fprintf(stderr, "cptoshm: done\n");
     /* copy data */
     ptr = mem;
     done = 0;
@@ -220,8 +212,7 @@ int main(int argc, char *argv[])
             cprefresh(buf, tbuf, rlen);
         }
         memclean(ptr, rlen);
-        memcpy(ptr, buf, rlen);
-        refreshmem(ptr, rlen);
+        cprefresh(ptr, buf, rlen);
         done += rlen;
         ptr += rlen;
     }

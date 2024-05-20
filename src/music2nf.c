@@ -91,6 +91,11 @@ void usage( ) {
 "  --pages-per-loop=intnum, -p intnum\n"
 "      see previous option. Default is 2 pages of 4096 bytes.\n"
 "  \n"
+"  --bytes-per-second=intnum, -m intnum\n"
+"      alternative to using --pages-per-loop, specifies total amount to write\n"
+"      in bytes per second, this way it is possible not to write multiples of\n"
+"      the page size per second.\n"
+"  \n"
 "  --dsync-number=intnum, -D intnum\n"
 "      every given number of loops data are synchronized with the block\n"
 "      device (disk, CF Card,...). The default is 32.\n"
@@ -100,6 +105,12 @@ void usage( ) {
 "      given number of times to a cleaned temporary buffer in RAM and back\n"
 "      to the original buffer. The default is 0. Using this option may\n"
 "      improve the sound quality of the stored nf file.\n"
+"  \n"
+"  --ram-loops-per-second=intnum, -X intnum\n"
+"  --ram-bytes-per-second=intnum, -Y intnum\n"
+"      by default the copies in RAM specified by the previous option \n"
+"      --number-copies are written as fast as possible. Optionally these two\n"
+"      options can be used for slower copy loops with timing.\n"
 "  \n"
 "  --stdin, -S\n"
 "      instead of --file option. Raw input samples are read from stdin \n"
@@ -132,8 +143,8 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     int lps, sf, sy, npages, nrcp, optc, sfloat, rate, bits, bpf, verbose, stdinp;
-    long bsize, fsize, nloops, cnt, c, id, s, e;
-    long i, j, nsec, frames;
+    long bsize, fsize, nloops, cnt, c, id, s, a, e, outpersec;
+    long i, nsec, frames, rambps, ramlps, ramtime, ramchunk;
     char *file, *nfinfo, *txt;
     char *buf, *ptmp, *tbuf;
     struct nfrec *check;
@@ -148,7 +159,10 @@ int main(int argc, char *argv[])
         {"loops-per-second", required_argument, 0,  'n' },
         {"dsync-number", required_argument, 0,  'D' },
         {"pages-per-loop", required_argument, 0,  'P' },
+        {"bytes-per-second", required_argument, 0,  'm' },
         {"number-copies", required_argument, 0, 'R' },
+        {"ram-loops-per-second", required_argument, 0,  'X' },
+        {"ram-bytes-per-second", required_argument, 0,  'Y' },
         {"stdin", no_argument, 0, 'S' },
         {"float", no_argument, 0, 'f' },
         {"rate", required_argument, 0, 'r' },
@@ -167,6 +181,7 @@ int main(int argc, char *argv[])
 
     /* defaults */
     lps = 1024;
+    outpersec = 0;
     sf = 32;
     npages = 2;
     nrcp = 0;
@@ -183,9 +198,13 @@ int main(int argc, char *argv[])
     bsize = 0;
     fsize = 0;
     nloops = 0;
+    ramlps = 0;
+    rambps = 0;
+    ramtime = 0;
+    ramchunk = 0;
 
 
-    while ((optc = getopt_long(argc, argv, "F:M:n:D:P:R:Sr:b:T:vVh",
+    while ((optc = getopt_long(argc, argv, "F:M:n:D:P:m:R:X:Y:Sr:b:T:vVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'F':
@@ -210,6 +229,15 @@ int main(int argc, char *argv[])
           nrcp = atoi(optarg);
           if (nrcp < 0 || nrcp > 1000) nrcp = 0;
           break;
+        case 'm':
+          outpersec = atoi(optarg);
+          break;
+        case 'X':
+           ramlps = atoi(optarg);
+           break;
+        case 'Y':
+           rambps = atoi(optarg);
+           break;
         case 'S':
           stdinp = 1;
           break;
@@ -238,6 +266,12 @@ int main(int argc, char *argv[])
     }
 
     nsec = 1000000000/lps;
+    if (ramlps != 0 && rambps != 0) {
+        ramtime = 1000000000/ramlps;
+        ramchunk = rambps/ramlps;
+        while (ramchunk % 16 != 0) ramchunk++;
+        if (ramchunk > TBUF) ramchunk = TBUF;
+    }
 
     if (file) {
         /* get parameters of sound file */
@@ -268,16 +302,7 @@ int main(int argc, char *argv[])
         if (start != 0 && sfinfo.seekable) {
             sf_seek(sndfile, start, SEEK_SET);
         }*/
-        /* determine all parameters 
-             PS: size of pages from nf_io
-             bsize: npages * psize
-             buf:   buffer aligned to page size
-             fsize: size of output file 
-             nloops:number of loops
-        */
-        bsize = npages * PS;
         fsize = frames*bpf;
-        nloops = fsize / bsize;
         txt = file;
 
         /* input buffer, align to page size */
@@ -315,16 +340,50 @@ int main(int argc, char *argv[])
             }
             ptmp += c;
         }
-        bsize = npages * PS;
         fsize = cnt;
-        nloops = fsize / bsize;
     }
 
-    /* maybe make refreshed copies */
+    /* determine all parameters 
+         PS: size of pages from nf_io
+         bsize: npages * psize
+         buf:   buffer aligned to page size
+         fsize: size of output file 
+         nloops:number of loops
+    */
+    if (outpersec != 0)
+        bsize = outpersec/lps;
+    else
+        bsize = npages * PS;
+    nloops = fsize / bsize;
+
+    /* maybe make refreshed copies, with or without timer */
     if (nrcp > 0) {
         /* page size aligned temporary buffer */
         ptmp = (char *)malloc(TBUF+PS);
         for (tbuf = ptmp; (long)tbuf % PS != 0; tbuf++);
+    }
+    if (nrcp > 0 && ramchunk > 0) {
+        for (i=nrcp;  i; i--) {
+             clock_gettime(CLOCK_MONOTONIC, &mtime);
+             for (a = 0, e = a+ramchunk; a < fsize; a += ramchunk, 
+                                                    e += ramchunk) {
+                 if (e > fsize) e = fsize;
+                 mtime.tv_nsec += ramtime;
+                 if (mtime.tv_nsec > 999999999) {
+                   mtime.tv_nsec -= 1000000000;
+                   mtime.tv_sec++;
+                 }
+                 while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
+                                                 &mtime, NULL) != 0) ;
+                 memclean(tbuf, e-a);
+                 cprefresh(tbuf, buf+a, e-a);
+                 memclean(buf+a, e-a);
+                 cprefresh(buf+a, tbuf, e-a);
+             }
+        }
+        free(ptmp);
+    }
+    if (nrcp > 0 && ramchunk == 0) {
         for (i=nrcp;  i; i--) {
              for (s = 0, e = s+TBUF; s < fsize; s += TBUF, e += TBUF) {
                  if (e > fsize) e = fsize;
@@ -359,14 +418,12 @@ int main(int argc, char *argv[])
           mtime.tv_nsec -= 1000000000;
           mtime.tv_sec++;
         }
-        refreshmem((char*)ptmp, PS*npages);
+        refreshmem((char*)ptmp, bsize);
         while (clock_nanosleep(CLOCK_MONOTONIC, 
                                TIMER_ABSTIME, &mtime, NULL) != 0) ;
-        /* write npages pages */
-        for (j=npages; j; j--) {
-            nfwritepage(ptmp);
-            ptmp += PS;
-        }
+        /* write bsize bytes */
+        s = nfwrite(ptmp, bsize);
+        ptmp += s;
         sy++;
         if (sy == sf) {
              fdatasync(nffd);
@@ -378,8 +435,8 @@ int main(int argc, char *argv[])
     /* write trailing pages */
     for(; ptmp < buf+fsize;) {
         refreshmem((char*)ptmp, PS);
-        nfwritepage(ptmp);
-        ptmp += PS;
+        s = nfwrite(ptmp, PS);
+        ptmp += s;
     }
     fdatasync(nffd);
     nfclose();

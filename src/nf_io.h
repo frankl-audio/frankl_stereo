@@ -90,6 +90,21 @@ int nfwritepage(void* buf)
     return count;
 }
 
+/* write (not necessarily full page) */
+int nfwrite(void* buf, int len)
+{
+    int count;
+    if (nfpos >= nfoff+nfsize) return 0;
+    count = (nfpos + len <= nfoff + nfsize) ? len : nfoff+nfsize-nfpos;
+    if (write(nffd, buf, count) != count){
+        fprintf(stderr, "nfwrite: Could not write %d bytes.\n", len);
+        nfclose();
+        exit(5);
+    }
+    nfpos += count;
+    return count;
+}
+
 /* we use an external nfinfo file for information about the data in 
    a block device file, we store info in a linked list */
 /* struct for single records */

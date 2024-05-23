@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 #include <sys/types.h>
 #include "cprefresh.h"
 
@@ -16,12 +17,16 @@ int main(int argc, char *argv[])
    double inp[1024], *ip;
    int32_t out[256], tout[256], *op;
    int i, mlen, nrcp;
+   struct timespec mtime;
 
    nrcp = 0;
    if (argc == 2) {
        nrcp = atoi(argv[1]);
        if (nrcp < 0 || nrcp > 5000)
            nrcp = 0;
+   }
+   if (clock_gettime(CLOCK_MONOTONIC, &mtime) < 0) {
+        exit(1);
    }
 
    while (1) {
@@ -33,9 +38,16 @@ int main(int argc, char *argv[])
         *op = (int32_t) (*ip * 2147483647);
         *(op+1) = (int32_t) (*(ip+1) * 2147483647);
       }
+      clock_gettime(CLOCK_MONOTONIC, &mtime);
       for(i=nrcp; i; i--) {
+          mtime.tv_nsec += 150000;
+          if (mtime.tv_nsec > 999999999) {
+            mtime.tv_nsec -= 1000000000;
+            mtime.tv_sec++;
+          }
           memclean((char*)tout, mlen);
           cprefresh((char*)tout, (char*)out, mlen);
+          clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
           memclean((char*)out, mlen);
           cprefresh((char*)out, (char*)tout, mlen);
       }

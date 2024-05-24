@@ -163,6 +163,15 @@ void usage( ) {
 "      faster to the sound device). See ADJUSTING SPEED below for\n"
 "      hints. The default is 0.\n"
 "\n"
+"  --number-copies=intnum, -R intnum\n"
+"      before writing data they are copied the specfied number of\n"
+"      times to a cleaned temporary buffer in RAM and then back to the \n"
+"      cleaned original buffer. The default is 0. \n"
+"\n"
+"  --slow-copies, -C\n"
+"      the copies given in --number-copies are made slower using the\n"
+"      timer (period is loop time / 2 * number of copies).\n"
+"\n"
 "  --no-delay-stats, -j\n"
 "      disables statistics about delayed loops, see DELAYED LOOPS below.\n"
 "      Only use this after finishing fine tuning of your parameters.\n"
@@ -239,6 +248,15 @@ void usage( ) {
 "  Without the --mmap option playhrt can buffer the input data, and the\n"
 "  size of the buffer can be chosen via the --buffer-size option.\n"
 "\n"
+"  On some systems sound quality is improved by additional copies and \n"
+"  and refreshs of the output data. E.g., assume that previous programs\n"
+"  send 32-integer samples with rate 48000. Then we could use\n"
+"     ......  | playhrt --mmap --stdin \\\n"
+"     --no-delay-stats --no-buf-stats --stripped \\\n"
+"     --loops-per-second=375 --sample-rate=48000 --sample-format=S32_LE \\\n"
+"     --device=hw:0,0 --extra-bytes-per-second=1 --non-blocking-write \\\n"
+"     --number-copies=10 --slow-copies\n"
+"\n"
 "  ADJUSTING SPEED\n"
 "\n"
 "  Using the --mmap mode and a double --verbose --verbose option\n"
@@ -271,12 +289,12 @@ void usage( ) {
 int main(int argc, char *argv[])
 {
     int sfd, s, moreinput, err, verbose, nrchannels, startcount, sumavg,
-        stripped, innetbufsize, dobufstats, countdelay, maxbad;
+        stripped, innetbufsize, dobufstats, countdelay, maxbad, nrcp, slowcp, k;
     long blen, hlen, ilen, olen, extra, loopspersec, nrdelays, sleep,
-         nsec, count, wnext, badloops, badreads, readmissing, avgav, checkav;
+         nsec, csec, count, wnext, badloops, badreads, readmissing, avgav, checkav;
     long long icount, ocount, badframes;
-    void *buf, *iptr, *optr, *max;
-    struct timespec mtime;
+    void *buf, *iptr, *optr, *tbuf, *max;
+    struct timespec mtime, ctime;
     struct timespec mtimecheck;
     double looperr, off, extraerr, extrabps, morebps;
     snd_pcm_t *pcm_handle;
@@ -308,6 +326,8 @@ int main(int argc, char *argv[])
         {"period-size", required_argument, 0, 'P' },
         {"device", required_argument, 0, 'd' },
         {"extra-bytes-per-second", required_argument, 0, 'e' },
+        {"number-copies", required_argument, 0, 'R' },
+        {"slow-copies", no_argument, 0, 'C' },
         {"sleep", required_argument, 0, 'D' },
         {"max-bad-reads", required_argument, 0, 'm' },
         {"in-net-buffer-size", required_argument, 0, 'K' },
@@ -345,6 +365,9 @@ int main(int argc, char *argv[])
     nrchannels = 2;
     access = SND_PCM_ACCESS_RW_INTERLEAVED;
     extrabps = 0;
+    nrcp = 0;
+    slowcp = 0;
+    csec = 0;
     sleep = 0;
     maxbad = 4;
     nonblock = 0;
@@ -354,7 +377,7 @@ int main(int argc, char *argv[])
     stripped = 0;
     dobufstats = 1;
     countdelay = 1;
-    while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:e:m:K:o:NXO:vyjVh",
+    while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:R:Ce:m:K:o:NXO:vyjVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'r':
@@ -374,6 +397,13 @@ int main(int argc, char *argv[])
           break;
         case 'n':
           loopspersec = atoi(optarg);
+          break;
+        case 'R':
+          nrcp = atoi(optarg);
+          if (nrcp < 0 || nrcp > 1000) nrcp = 0;
+          break;
+        case 'C':
+          slowcp = 1;
           break;
         case 's':
           rate = atoi(optarg);
@@ -472,6 +502,7 @@ int main(int argc, char *argv[])
     extraerr = 1.0*bytesperframe*rate;
     extraerr = extraerr/(extraerr+extrabps);
     nsec = (int) (1000000000*extraerr/loopspersec);
+    if (slowcp) csec = nsec / (4*nrcp);
     if (verbose) {
         fprintf(stderr, "playhrt: Step size is %ld nsec.\n", nsec);
     }
@@ -487,6 +518,13 @@ int main(int argc, char *argv[])
         if (verbose)
             fprintf(stderr, "playhrt: Setting input chunk size to %ld bytes.\n", ilen);
     }
+    /* temporary buffer */
+    tbuf = NULL;     
+    if (posix_memalign(&tbuf, 4096, 2*olen*bytesperframe)) {
+        fprintf(stderr, "myplayhrt: Cannot allocate buffer for cleaning.\n");
+        exit(6);
+    }        
+
     /* need big enough input buffer */
     if (blen < 3*ilen) {
         blen = 3*ilen;
@@ -787,6 +825,35 @@ int main(int argc, char *argv[])
           iptr = areas[0].addr + offset * bytesperframe;
           memclean(iptr, ilen);
           s = read(sfd, iptr, ilen);
+          if (slowcp) {
+              ctime.tv_nsec = mtime.tv_nsec;
+              ctime.tv_sec = mtime.tv_sec;
+              for (k=nrcp; k; k--) {
+                  ctime.tv_nsec += csec;
+                  if (ctime.tv_nsec > 999999999) {
+                    ctime.tv_nsec -= 1000000000;
+                    ctime.tv_sec++;
+                  }
+                  clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
+                  memclean((char*)tbuf, ilen);
+                  cprefresh((char*)tbuf, (char*)iptr, ilen);
+                  ctime.tv_nsec += csec;
+                  if (ctime.tv_nsec > 999999999) {
+                    ctime.tv_nsec -= 1000000000;
+                    ctime.tv_sec++;
+                  }
+                  clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
+                  memclean((char*)iptr, ilen);
+                  cprefresh((char*)iptr, (char*)tbuf, ilen);
+              }
+          } else {
+              for (k=nrcp; k; k--) {
+                  memclean((char*)tbuf, ilen);
+                  cprefresh((char*)tbuf, (char*)iptr, ilen);
+                  memclean((char*)iptr, ilen);
+                  cprefresh((char*)iptr, (char*)tbuf, ilen);
+              }
+          }
           mtime.tv_nsec += nsec;
           if (mtime.tv_nsec > 999999999) {
             mtime.tv_nsec -= 1000000000;
@@ -822,6 +889,35 @@ int main(int argc, char *argv[])
           iptr = areas[0].addr + offset * bytesperframe;
           memclean(iptr, ilen);
           s = read(sfd, iptr, ilen);
+          if (slowcp) {
+              ctime.tv_nsec = mtime.tv_nsec;
+              ctime.tv_sec = mtime.tv_sec;
+              for (k=nrcp; k; k--) {
+                  ctime.tv_nsec += csec;
+                  if (ctime.tv_nsec > 999999999) {
+                    ctime.tv_nsec -= 1000000000;
+                    ctime.tv_sec++;
+                  }
+                  clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
+                  memclean((char*)tbuf, ilen);
+                  cprefresh((char*)tbuf, (char*)iptr, ilen);
+                  ctime.tv_nsec += csec;
+                  if (ctime.tv_nsec > 999999999) {
+                    ctime.tv_nsec -= 1000000000;
+                    ctime.tv_sec++;
+                  }
+                  clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
+                  memclean((char*)iptr, ilen);
+                  cprefresh((char*)iptr, (char*)tbuf, ilen);
+              }
+          } else {
+              for (k=nrcp; k; k--) {
+                  memclean((char*)tbuf, ilen);
+                  cprefresh((char*)tbuf, (char*)iptr, ilen);
+                  memclean((char*)iptr, ilen);
+                  cprefresh((char*)iptr, (char*)tbuf, ilen);
+              }
+          }
           mtime.tv_nsec += nsec;
           if (mtime.tv_nsec > 999999999) {
             mtime.tv_nsec -= 1000000000;
@@ -912,6 +1008,35 @@ int main(int argc, char *argv[])
           /* these memclean may be  commented out to save some CPU-time */
           /* in --mmap mode we read directly into mmaped space without internal buffer */
           s = read(sfd, iptr, ilen);
+          if (slowcp) {
+              ctime.tv_nsec = mtime.tv_nsec;
+              ctime.tv_sec = mtime.tv_sec;
+              for (k=nrcp; k; k--) {
+                  ctime.tv_nsec += csec;
+                  if (ctime.tv_nsec > 999999999) {
+                    ctime.tv_nsec -= 1000000000;
+                    ctime.tv_sec++;
+                  }
+                  clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
+                  memclean((char*)tbuf, ilen);
+                  cprefresh((char*)tbuf, (char*)iptr, ilen);
+                  ctime.tv_nsec += csec;
+                  if (ctime.tv_nsec > 999999999) {
+                    ctime.tv_nsec -= 1000000000;
+                    ctime.tv_sec++;
+                  }
+                  clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
+                  memclean((char*)iptr, ilen);
+                  cprefresh((char*)iptr, (char*)tbuf, ilen);
+              }
+          } else {
+              for (k=nrcp; k; k--) {
+                  memclean((char*)tbuf, ilen);
+                  cprefresh((char*)tbuf, (char*)iptr, ilen);
+                  memclean((char*)iptr, ilen);
+                  cprefresh((char*)iptr, (char*)tbuf, ilen);
+              }
+          }
 
           /* compute time for next wakeup */
           mtime.tv_nsec += nsec;

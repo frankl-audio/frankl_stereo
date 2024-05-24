@@ -438,7 +438,7 @@ int main(int argc, char *argv[])
         }
     }
     if (ramlps != 0 && rambps != 0) {
-        ramtime = 1000000000/ramlps;
+        ramtime = 1000000000/(2*ramlps);
         ramchunk = rambps/ramlps;
         while (ramchunk % 16 != 0) ramchunk++;
         if (ramchunk > TBUF) ramchunk = TBUF;
@@ -742,6 +742,13 @@ int main(int argc, char *argv[])
                                                        &mtime, NULL) != 0) ;
                        memclean(tbuf, e-a);
                        cprefresh(tbuf, buf+a, e-a);
+                       mtime.tv_nsec += ramtime;
+                       if (mtime.tv_nsec > 999999999) {
+                         mtime.tv_nsec -= 1000000000;
+                         mtime.tv_sec++;
+                       }
+                       while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
+                                                       &mtime, NULL) != 0) ;
                        memclean(buf+a, e-a);
                        cprefresh(buf+a, tbuf, e-a);
                    }

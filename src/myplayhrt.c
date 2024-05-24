@@ -784,16 +784,16 @@ int main(int argc, char *argv[])
                        ctime.tv_nsec -= 1000000000;
                        ctime.tv_sec++;
                      }
-                     memclean((char*)tbuf, ilen);
                      clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
+                     memclean((char*)tbuf, ilen);
                      cprefresh((char*)tbuf, (char*)iptr, ilen);
                      ctime.tv_nsec += csec;
                      if (ctime.tv_nsec > 999999999) {
                        ctime.tv_nsec -= 1000000000;
                        ctime.tv_sec++;
                      }
-                     memclean((char*)iptr, ilen);
                      clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
+                     memclean((char*)iptr, ilen);
                      cprefresh((char*)iptr, (char*)tbuf, ilen);
                  }
              } else {

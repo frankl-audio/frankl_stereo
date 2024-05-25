@@ -34,6 +34,7 @@ resample_soxr --shmname=/play.flac --param-file=/cache/VOLRACE \
 sleep 0.5
 
 # pasuspender can be useful when a pulseaudio server is running
+# we refresh data before output with --number-copies=10 --slow-copies
 catloop --block-size=1024 --shared /bl1 /bl2 /bl3 | \
     pasuspender -- playhrt \
            --stdin \
@@ -43,6 +44,8 @@ catloop --block-size=1024 --shared /bl1 /bl2 /bl3 | \
            --loops-per-second=1000 \
            --mmap \
            --non-blocking-write \
+           --number-copies=10 \
+           --slow-copies \
            ${VERBOSE} \
            --extra-bytes-per-second=${EXTRABYTESPLAY} \
            --hw-buffer=8192

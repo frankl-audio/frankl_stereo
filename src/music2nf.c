@@ -373,18 +373,18 @@ int main(int argc, char *argv[])
                    mtime.tv_nsec -= 1000000000;
                    mtime.tv_sec++;
                  }
-                 memclean(tbuf, e-a);
                  while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
                                                  &mtime, NULL) != 0) ;
+                 memclean(tbuf, e-a);
                  cprefresh(tbuf, buf+a, e-a);
                  mtime.tv_nsec += ramtime;
                  if (mtime.tv_nsec > 999999999) {
                    mtime.tv_nsec -= 1000000000;
                    mtime.tv_sec++;
                  }
-                 memclean(buf+a, e-a);
                  while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
                                                  &mtime, NULL) != 0) ;
+                 memclean(buf+a, e-a);
                  cprefresh(buf+a, tbuf, e-a);
              }
         }

@@ -21,24 +21,48 @@ fi
 
 ##  With these example parameters the output file will be written
 ##  with 8 MB/sec. These will be written in 1024 loops, that is
-##  8 kB per loop. And 32 times per second (after every 32 loops)
-##  the written data will be synced to the media containing the file.
-##  Before the output of data they will be written 16 times to 
-##  a cleared temporary buffer and then back to the cleared original
-##  buffer.
+##  8 kB per loop. 
+##  Before writing out the data, they are copied 3 times to a temporary
+##  buffer and back, this is done with 24 MB/sec.
+##  Once a second the written data are synced to the media containing 
+##  the file.
 
 bufhrt --interval --file $1 --outfile=$2 \
        --buffer-size=536870912 --loops-per-second=1024 \
-       --bytes-per-second=8290304 --number-copies=16 \
-       --dsyncs-per-second=32
+       --bytes-per-second=8388608 --number-copies=3 \
+       --ram-loops-per-second=1024 --ram-bytes-per-second=25165824 \
+       --dsyncs-per-second=1
 
 ##  You may experiment with these parameters. 
-##  On a very fast medium higher --dsyncs-per-second may work.
-##  Larger values for --number-copies need more time but may result
-##  in better sound quality.
+##  Of course, you can vary the bytes and loops per second for faster
+##  or slower writing.
+##  Or try more, but faster copies (like --number-copies=16 or higher
+##  and without the --ram... options).
+##  The sychronization could be done more often (like
+##  --dsyncs-per-second=32)
+
 ##  For best results you should reduce the --bytes-per-second, very good
-##  results on some flash cards (CF, SD) were achieved with low values
-##  like 131072 - of course this takes a long time.
+##  results on some flash media (CF, SD cards, SSD) were achieved with low 
+##  values like 131072 - of course this takes a long time.
 ##  It can be sensible (but is not needed) that the --bytes-per-second 
-##  are divisible --loops-per-second and that the number of bytes written 
-##  per loop is a multiple of 512 (the usual block size on flash cards, SSDs).
+##  are divisible by the value of --loops-per-second and that the number of 
+##  bytes written per loop is a multiple of 512 (the usual block size on 
+##  flash cards, SSDs). But you could also try non-divisible values.
+
+##  Here are example parameters found in a cooperation of several users.
+##  The output is written very slowly, so some patience is needed. So far,
+##  they yield the best results on the authors playback system.
+
+# bufhrt --interval --file="$1" --outfile="$2" \
+#        --buffer-size=419430400 --loops-per-second=10 \
+#        --bytes-per-second=188044 --number-copies=10 \
+#        --ram-loops-per-second=100 --ram-bytes-per-second=1880440 \
+#        --dsyncs-per-second=1
+
+##  For best results you should use a computer optimized for audio
+##  (PC or small computers from Odroid or Raspberry Pi with audiophile
+##  power supply). If you have several CPU cores, try to isolate some
+##  of them such that they can be used for audio programs exclusively.
+##  E.g., if CPU 2 is isolated, start bufhrt on it with high priority:
+
+##         chrt -f 60 taskset -c 2 bufhrt .....

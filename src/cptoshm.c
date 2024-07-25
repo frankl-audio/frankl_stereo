@@ -56,8 +56,8 @@ void usage( ) {
 "\n"
 "  --number-copies=intnum, -R intnum\n"
 "      before writing data they are copied the specfied number of\n"
-"      times to a cleaned temporary buffer in RAM and then back to the \n"
-"      cleaned original buffer. The default is 0. \n"
+"      times through  cleaned temporary buffers in RAM.\n"
+"      The default is 0. \n"
 "\n"
 "  --verbose, -v\n"
 "      print some information during startup and operation.\n"
@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
     size_t length, done, rlen;
     struct stat sb;
     char *mem, *ptr;
-    void *buf, *tbuf;
+    void *buf, *tbufs[1024];
 
     /* read command line options */
     static struct option longoptions[] = {
@@ -170,8 +170,10 @@ int main(int argc, char *argv[])
     }
     if (verbose) {
         fprintf(stderr,
-                "cptoshm: input from %s, shared mem is %s, max length %ld\n",
-                infile, memname, (long)length);
+                "cptoshm: input %s, output %s, buffer %ld, max %ld\n",
+                infile, memname, (long) bufsize, (long)length);
+        if (nrcp)
+            fprintf(stderr, "         refreshs %ld\n", (long)nrcp);
     }
     buf = NULL;
     if (posix_memalign(&buf, 4096, bufsize)) {
@@ -188,12 +190,13 @@ int main(int argc, char *argv[])
         fprintf(stderr, "cptoshm: Cannot map shared memory.\n");
         exit(6);
     }
-    tbuf = NULL;
     if (nrcp) {
-        if (posix_memalign(&tbuf, 4096, bufsize)) {
-            fprintf(stderr, "cptoshm: Cannot allocate buffer of length %ld.\n",
-                            (long)bufsize);
-            exit(2);
+        /* temporary buffers */
+        for (i=1; i < nrcp; i++) {
+            if (posix_memalign(tbufs+i, 4096, bufsize)) {
+                fprintf(stderr, "cptoshm: Cannot allocate buffer for cleaning.\n");
+                exit(2);
+            }
         }
     }
         
@@ -205,11 +208,15 @@ int main(int argc, char *argv[])
         rlen = read(ifd, buf, bufsize);
         rlen = (done+rlen > length)? length-done:rlen;
         if (rlen == 0) break;
-        for (i=nrcp;  i; i--) {
-            memclean(tbuf, rlen);
-            cprefresh(tbuf, buf, rlen);
-            memclean(buf, rlen);
-            cprefresh(buf, tbuf, rlen);
+
+        if (nrcp) {
+            tbufs[0] = buf;
+            tbufs[nrcp] = buf;
+            for (i=1; i <= nrcp; i++) {
+                memclean((char*)(tbufs[i]), rlen);
+                cprefresh((char*)(tbufs[i]), (char*)(tbufs[i-1]), rlen);
+                memclean((char*)(tbufs[i-1]), rlen);
+            }
         }
         memclean(ptr, rlen);
         cprefresh(ptr, buf, rlen);

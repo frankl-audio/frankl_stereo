@@ -178,6 +178,11 @@ void usage( ) {
 "      file given in --param-file was changed). Default is 44100, for high \n"
 "      sample rates a larger value may be desirable.\n"
 "\n"
+"  --number-copies=intnum, -R intnum\n"
+"      before writing data they are copied the specfied number of\n"
+"      times through  cleaned temporary buffers in RAM.\n"
+"      The default is 0. \n"
+"\n"
 "  --help, -h\n"
 "      show this help.\n"
 "\n"
@@ -310,6 +315,10 @@ int main(int argc, char *argv[])
   long fadinglength, fadecount=-1;
   char *pnam;
   struct nfrec *nfr;
+  /* buffer for optional output refresh */
+  long nrcp, rlen;
+  void *tbufs[1024];
+
   for(i=0; i<1024; carry[i] = 0.0, i++);
 
   if (argc == 1) {
@@ -338,6 +347,7 @@ int main(int argc, char *argv[])
       {"until", required_argument, 0, 'u' },
       {"number-frames", required_argument, 0, 'n' },
       {"buffer-length", required_argument, 0, 'b' },
+      {"number-copies", required_argument, 0, 'R' },
       {"toint32", no_argument, 0, 'I' },
       {"verbose", no_argument, 0, 'p' },
       {"version", no_argument, 0, 'V' },
@@ -370,8 +380,9 @@ int main(int argc, char *argv[])
   fadinglength = 44100;
   pnam = NULL;
   verbose = 0;
+  nrcp = 0;
   while ((optc = getopt_long(argc, argv, 
-          "M:N:i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:b:IpVh",
+          "M:N:i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:R:b:IpVh",
           longoptions, &optind)) != -1) {
       switch (optc) {
       case 'v':
@@ -412,6 +423,10 @@ int main(int argc, char *argv[])
         break;
       case 'n':
         total = atoi(optarg);
+        break;
+      case 'R':
+        nrcp = atoi(optarg);
+        if (nrcp < 0 || nrcp > 1000) nrcp = 0;
         break;
       case 'b':
         blen = atoi(optarg);
@@ -556,6 +571,16 @@ int main(int argc, char *argv[])
   out = (double*) malloc(nch*OLEN*sizeof(double));
   if (out32) 
       iout = (int32_t*) malloc(nch*OLEN*sizeof(int32_t));
+  if (nrcp) {
+      /* temporary buffers */
+      for (i=1; i < nrcp; i++) {
+          if (posix_memalign(tbufs+i, 4096, nch*OLEN*sizeof(double))) {
+              fprintf(stderr, "resample_soxr: Cannot allocate buffer for cleaning.\n");
+              exit(2);
+          }
+      }
+  }
+
   /* create resampler for 64 bit floats and high quality */
   /* the paramters are documented in the soxr.h file, see
           https://sourceforge.net/p/soxr/code/ci/master/tree/src/soxr.h
@@ -671,8 +696,19 @@ int main(int argc, char *argv[])
         }
     }
  
-    /* write output */
-    refreshmem((char*)out, nch*sizeof(double)*outdone);
+    /* write output, optionally after cleaning  */
+    if (nrcp) {
+        rlen = nch*sizeof(double)*outdone;
+        tbufs[0] = (void*)out;
+        tbufs[nrcp] = (void*)out;
+        for (i=1; i <= nrcp; i++) {
+            memclean((char*)(tbufs[i]), rlen);
+            cprefresh((char*)(tbufs[i]), (char*)(tbufs[i-1]), rlen);
+            memclean((char*)(tbufs[i-1]), rlen);
+        }
+    } else {
+        refreshmem((char*)out, nch*sizeof(double)*outdone);
+    }
     if (out32) {
         memclean((char*)iout, nch*sizeof(int32_t)*outdone);
         for (i=0; i<nch*outdone; i++)

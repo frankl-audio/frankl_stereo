@@ -171,8 +171,8 @@ void usage( ) {
 "\n"
 "  --number-copies=intnum, -R intnum\n"
 "      before writing data they are copied the specfied number of\n"
-"      times to a cleaned temporary buffer in RAM and then back to the \n"
-"      cleaned original buffer. The default is 0. \n"
+"      times through  cleaned temporary buffers in RAM.\n"
+"      The default is 0. \n"
 "\n"
 "  --slow-copies, -C\n"
 "      the copies given in --number-copies are made slower using the\n"
@@ -290,7 +290,7 @@ int main(int argc, char *argv[])
     long blen, ilen, olen, extra, loopspersec, nrdelays, sleep,
          nsec, csec, count, badloops, badreads, readmissing, avgav, checkav;
     long long icount, ocount, badframes;
-    void *buf, *iptr, *tbuf;
+    void *buf, *iptr, *tbuf, *tbufs[1024];
     struct timespec mtime, ctime;
     double looperr, extraerr, extrabps, morebps;
     snd_pcm_t *pcm_handle;
@@ -516,12 +516,14 @@ int main(int argc, char *argv[])
         if (verbose)
             fprintf(stderr, "playhrt: Setting input chunk size to %ld bytes.\n", ilen);
     }
-    /* temporary buffer */
-    tbuf = NULL;
-    if (posix_memalign(&tbuf, 4096, 2*olen*bytesperframe)) {
-        fprintf(stderr, "myplayhrt: Cannot allocate buffer for cleaning.\n");
-        exit(2);
+    /* temporary buffers */
+    for (i=1; i < nrcp; i++) {
+        if (posix_memalign(tbufs+i, 4096, 2*olen*bytesperframe)) {
+            fprintf(stderr, "myplayhrt: Cannot allocate buffer for cleaning.\n");
+            exit(2);
+        }
     }
+    tbuf = tbufs[1];
 
     /* need big enough input buffer */
     if (blen < 3*ilen) {
@@ -776,25 +778,20 @@ int main(int argc, char *argv[])
              sz += ilen;
              ptr += ilen;
              if (slowcp) {
+                 tbufs[0] = iptr;
+                 tbufs[nrcp] = iptr;
                  ctime.tv_nsec = mtime.tv_nsec;
                  ctime.tv_sec = mtime.tv_sec;
-                 for (k=nrcp; k; k--) {
+                 for (k=1; k <= nrcp; k++) {
                      ctime.tv_nsec += csec;
                      if (ctime.tv_nsec > 999999999) {
                        ctime.tv_nsec -= 1000000000;
                        ctime.tv_sec++;
                      }
                      clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
-                     memclean((char*)tbuf, ilen);
-                     cprefresh((char*)tbuf, (char*)iptr, ilen);
-                     ctime.tv_nsec += csec;
-                     if (ctime.tv_nsec > 999999999) {
-                       ctime.tv_nsec -= 1000000000;
-                       ctime.tv_sec++;
-                     }
-                     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ctime, NULL);
-                     memclean((char*)iptr, ilen);
-                     cprefresh((char*)iptr, (char*)tbuf, ilen);
+                     memclean((char*)(tbufs[k]), ilen);
+                     cprefresh((char*)(tbufs[k]), (char*)(tbufs[k-1]), ilen);
+                     memclean((char*)(tbufs[k-1]), ilen);
                  }
              } else {
                  /*refreshmem(iptr, ilen); */

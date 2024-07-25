@@ -101,9 +101,9 @@ void usage( ) {
 "      device (disk, CF Card,...). The default is 32.\n"
 "  \n"
 "  --number-copies=intnum, -R intnum\n"
-"      before writing the data to the block device they are copied the\n"
-"      given number of times to a cleaned temporary buffer in RAM and back\n"
-"      to the original buffer. The default is 0. Using this option may\n"
+"      before writing data they are copied the specfied number of\n"
+"      times through  cleaned temporary buffers in RAM.\n"
+"      The default is 0. Using this option may\n"
 "      improve the sound quality of the stored nf file.\n"
 "  \n"
 "  --ram-loops-per-second=intnum, -X intnum\n"
@@ -144,13 +144,14 @@ int main(int argc, char *argv[])
 {
     int lps, sf, sy, npages, nrcp, optc, sfloat, rate, bits, bpf, verbose, stdinp;
     long bsize, fsize, nloops, cnt, c, id, s, a, e, outpersec;
-    long i, nsec, frames, rambps, ramlps, ramtime, ramchunk;
+    long i, nsec, frames, rambps, ramlps, ramtime, ramchunk, k, outtime, outcopies;
     char *file, *nfinfo, *txt;
     char *buf, *ptmp, *tbuf;
+    void *obufs[1024];
     struct nfrec *check;
     SF_INFO sfinfo;
     SNDFILE *sndfile;
-    struct timespec mtime;
+    struct timespec mtime, otime;
 
     /* read command line options */
     static struct option longoptions[] = {
@@ -163,6 +164,7 @@ int main(int argc, char *argv[])
         {"number-copies", required_argument, 0, 'R' },
         {"ram-loops-per-second", required_argument, 0,  'X' },
         {"ram-bytes-per-second", required_argument, 0,  'Y' },
+        {"out-copies", required_argument, 0, 'c' },
         {"stdin", no_argument, 0, 'S' },
         {"float", no_argument, 0, 'f' },
         {"rate", required_argument, 0, 'r' },
@@ -185,6 +187,8 @@ int main(int argc, char *argv[])
     sf = 32;
     npages = 2;
     nrcp = 0;
+    outcopies = 0;
+    outtime = 0;
     rate = 48000;
     bits = 32;
     stdinp = 0;
@@ -204,7 +208,7 @@ int main(int argc, char *argv[])
     ramchunk = 0;
 
 
-    while ((optc = getopt_long(argc, argv, "F:M:n:D:P:m:R:X:Y:Sr:b:T:vVh",
+    while ((optc = getopt_long(argc, argv, "F:M:n:D:P:m:R:X:Y:c:Sr:b:T:vVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'F':
@@ -228,6 +232,10 @@ int main(int argc, char *argv[])
         case 'R':
           nrcp = atoi(optarg);
           if (nrcp < 0 || nrcp > 1000) nrcp = 0;
+          break;
+        case 'c':
+          outcopies = atoi(optarg);
+          if (outcopies < 0 || outcopies > 1000) nrcp = 0;
           break;
         case 'm':
           outpersec = atoi(optarg);
@@ -356,6 +364,19 @@ int main(int argc, char *argv[])
         bsize = npages * PS;
     nloops = fsize / bsize;
 
+
+    /* buffers for loop of output copies */
+    if (outcopies > 0) {
+        /* spend half of loop duration with copies of output chunk */
+        outtime = nsec/(2*outcopies);
+        for (i=1; i < outcopies; i++) {
+            if (posix_memalign(obufs+i, 4096, 2*bsize)) {
+                fprintf(stderr, "bufhrt: Cannot allocate buffer for output cleaning.\n");
+                exit(20);
+            }
+        }
+    }
+
     /* maybe make refreshed copies, with or without timer */
     if (nrcp > 0) {
         /* page size aligned temporary buffer */
@@ -425,7 +446,27 @@ int main(int argc, char *argv[])
           mtime.tv_nsec -= 1000000000;
           mtime.tv_sec++;
         }
-        refreshmem((char*)ptmp, bsize);
+        /* maybe refresh output chunk before sleep */
+        if (outcopies > 0) {
+            obufs[0] = ptmp;
+            obufs[outcopies] = ptmp;
+            otime.tv_nsec = mtime.tv_nsec;
+            otime.tv_sec = mtime.tv_sec;
+            for (k=1; k <= outcopies; k++) {
+                otime.tv_nsec += outtime;
+                if (otime.tv_nsec > 999999999) {
+                  otime.tv_nsec -= 1000000000;
+                  otime.tv_sec++;
+                }
+                clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, 
+                                                           &otime, NULL);
+                memclean((char*)(obufs[k]), bsize);
+                cprefresh((char*)(obufs[k]), (char*)(obufs[k-1]), bsize);
+                memclean((char*)(obufs[k-1]), bsize);
+            }
+        } else {
+            refreshmem((char*)ptmp, bsize);
+        }
         while (clock_nanosleep(CLOCK_MONOTONIC, 
                                TIMER_ABSTIME, &mtime, NULL) != 0) ;
         /* write bsize bytes */

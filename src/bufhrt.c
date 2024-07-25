@@ -150,6 +150,13 @@ void usage( ) {
 "      --number-copies are written as fast as possible. Optionally these two\n"
 "      options can be used for slower copy loops with timing.\n"
 "\n"
+"  --out-copies=intnum, -c intnum\n"
+"      with this option the content of the next output chunk will be copied\n"
+"      through a loop of intnum buffers. The copies will be done in equal time\n"
+"      intervals during the first half of the waiting time in the output loop.\n"
+"      This option can be used instead or together with --number-copies.\n"
+"      The default is 0, so no copies.\n"
+"\n"
 "  --dsyncs-per-second=intval, -D intval\n"
 "      in interval mode data of output file will be transfered to storage\n"
 "      hardware with this frequency. Sensible values depend on hardware, can\n"
@@ -222,17 +229,19 @@ int main(int argc, char *argv[])
         outnetbufsize, dsync;
     long blen, hlen, ilen, olen, outpersec, loopspersec, nsec, count, wnext,
          badreads, badreadbytes, badwrites, badwritebytes, lcount, 
-         dcount, dsyncfreq, fsize, e, a, rambps, ramlps, ramtime, ramchunk;
+         dcount, dsyncfreq, fsize, e, a, outtime, outcopies, rambps, ramlps, 
+         ramtime, ramchunk;
     long long icount, ocount;
     void *buf, *iptr, *optr, *max;
     char *port, *inhost, *inport, *outfile, *infile, *ptmp, *tbuf;
-    struct timespec mtime, mtime1;
+    void *obufs[1024];
+    struct timespec mtime, mtime1, otime;
     double looperr, extraerr, extrabps, off, dsyncpersec;
     /* variables for shared memory input */
     char **fname, *fnames[100], **tmpname, *tmpnames[100], **mem, *mems[100],
          *ptr;
     sem_t **sem, *sems[100], **semw, *semsw[100];
-    int fd[100], i, flen, size, c, sz;
+    int fd[100], i, k, flen, size, c, sz;
     struct stat sb;
 
     /* read command line options */
@@ -253,6 +262,7 @@ int main(int argc, char *argv[])
         {"dsync", no_argument, 0, 'd' },
         {"file", required_argument, 0, 'F' },
         {"number-copies", required_argument, 0, 'R' },
+        {"out-copies", required_argument, 0, 'c' },
         {"host-to-read", required_argument, 0, 'H' },
         {"port-to-read", required_argument, 0, 'P' },
         {"stdin", no_argument, 0, 'S' },
@@ -289,6 +299,8 @@ int main(int argc, char *argv[])
     rambps = 0;
     ramtime = 0;
     ramchunk = 0;
+    outcopies = 0;
+    outtime = 0;
     rate = 0;
     bytesperframe = 0;
     inhost = NULL;
@@ -301,7 +313,7 @@ int main(int argc, char *argv[])
     innetbufsize = 0;
     outnetbufsize = 0;
     verbose = 0;
-    while ((optc = getopt_long(argc, argv, "p:o:b:i:D:n:m:X:Y:s:f:F:R:H:P:e:vVhd",
+    while ((optc = getopt_long(argc, argv, "p:o:b:i:D:n:m:X:Y:s:f:F:R:c:H:P:e:vVhd",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'p':
@@ -337,6 +349,10 @@ int main(int argc, char *argv[])
         case 'R':
           nrcp = atoi(optarg);
           if (nrcp < 0 || nrcp > 1000) nrcp = 0;
+          break;
+        case 'c':
+          outcopies = atoi(optarg);
+          if (outcopies < 0 || outcopies > 1000) outcopies = 0;
           break;
         case 'f':
           if (strcmp(optarg, "S16_LE")==0) {
@@ -512,6 +528,18 @@ int main(int argc, char *argv[])
     max = buf + blen;
     iptr = buf;
     optr = buf;
+
+    /* buffers for loop of output copies */
+    if (outcopies > 0) {
+        /* spend half of loop duration with copies of output chunk */
+        outtime = nsec/(2*outcopies);
+        for (i=1; i < outcopies; i++) {
+            if (posix_memalign(obufs+i, 4096, 2*olen)) {
+                fprintf(stderr, "bufhrt: Cannot allocate buffer for output cleaning.\n");
+                exit(20);
+            }
+        }
+    }
 
     /* outgoing socket */
     if (port != 0) {
@@ -780,7 +808,6 @@ int main(int argc, char *argv[])
                 mtime.tv_nsec -= 1000000000;
                 mtime.tv_sec++;
               }
-              refreshmem((char*)optr, wnext);
               clock_gettime(CLOCK_MONOTONIC, &mtime1);
               if ((mtime1.tv_sec > mtime.tv_sec)
                   || (mtime1.tv_sec == mtime.tv_sec
@@ -794,6 +821,27 @@ int main(int argc, char *argv[])
                    mtime.tv_nsec -= 1000000000;
                    mtime.tv_sec++;
                  }
+              }
+              /* refresh output chunk before sleep */
+              if (outcopies > 0) {
+                  obufs[0] = optr;
+                  obufs[outcopies] = optr;
+                  otime.tv_nsec = mtime.tv_nsec;
+                  otime.tv_sec = mtime.tv_sec;
+                  for (k=1; k <= outcopies; k++) {
+                      otime.tv_nsec += outtime;
+                      if (otime.tv_nsec > 999999999) {
+                        otime.tv_nsec -= 1000000000;
+                        otime.tv_sec++;
+                      }
+                      clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, 
+                                                                 &otime, NULL);
+                      memclean((char*)(obufs[k]), wnext);
+                      cprefresh((char*)(obufs[k]), (char*)(obufs[k-1]), wnext);
+                      memclean((char*)(obufs[k-1]), wnext);
+                  }
+              } else {
+                  refreshmem((char*)optr, wnext);
               }
               while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
                                                                  &mtime, NULL)

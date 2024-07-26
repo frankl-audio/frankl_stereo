@@ -22,22 +22,27 @@ fi
 ##  With these example parameters the output file will be written
 ##  with 8 MB/sec. These will be written in 1024 loops, that is
 ##  8 kB per loop. 
-##  Before writing out the data, they are copied 3 times to a temporary
+##  Before writing out the data, they are copied to a temporary
 ##  buffer and back, this is done with 24 MB/sec.
+##  Before output data are copied through a loop of 10 small
+##  temporary buffers.
 ##  Once a second the written data are synced to the media containing 
 ##  the file.
+##  This combination works very well on the authors system.
 
 bufhrt --interval --file $1 --outfile=$2 \
        --buffer-size=536870912 --loops-per-second=1024 \
-       --bytes-per-second=8388608 --number-copies=3 \
+       --bytes-per-second=8388608 --number-copies=1 \
        --ram-loops-per-second=1024 --ram-bytes-per-second=25165824 \
-       --dsyncs-per-second=1
+       --dsyncs-per-second=1 --out-copies=10
 
 ##  You may experiment with these parameters. 
 ##  Of course, you can vary the bytes and loops per second for faster
 ##  or slower writing.
 ##  Or try more, but faster copies (like --number-copies=16 or higher
 ##  and without the --ram... options).
+##  Compare if you like the result with higher --out-copies or with higher
+##  --number-copies more.
 ##  The sychronization could be done more often (like
 ##  --dsyncs-per-second=32)
 
@@ -55,9 +60,9 @@ bufhrt --interval --file $1 --outfile=$2 \
 
 # bufhrt --interval --file="$1" --outfile="$2" \
 #        --buffer-size=419430400 --loops-per-second=10 \
-#        --bytes-per-second=188044 --number-copies=10 \
+#        --bytes-per-second=188044 --number-copies=1 \
 #        --ram-loops-per-second=100 --ram-bytes-per-second=1880440 \
-#        --dsyncs-per-second=1
+#        --dsyncs-per-second=1 --out-copies=256
 
 ##  For best results you should use a computer optimized for audio
 ##  (PC or small computers from Odroid or Raspberry Pi with audiophile
@@ -66,3 +71,4 @@ bufhrt --interval --file $1 --outfile=$2 \
 ##  E.g., if CPU 2 is isolated, start bufhrt on it with high priority:
 
 ##         chrt -f 60 taskset -c 2 bufhrt .....
+

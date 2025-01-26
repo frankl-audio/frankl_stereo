@@ -1,5 +1,5 @@
 
-VERSION=0.9.dev
+VERSION=0.9.1.dev
 
 REFRESH=""
 
@@ -105,6 +105,18 @@ bin/myplayhrt: src/version.h tmp/net.o src/myplayhrt.c tmp/cprefresh.o tmp/cpref
 
 bin/by4: src/by4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/by4 src/by4.c tmp/cprefresh.o tmp/cprefresh_ass.o
+
+tmp/counttotick_aa64.o: src/counttotick_aa64.h src/counttotick_aa64.s |tmp
+	$(CC) $(CFLAGSNO) -o tmp/counttotick_aa64.o -c src/counttotick_aa64.s
+
+bin/myplayhrt_c4: src/myplayhrt_c4.c src/version.h tmp/net.o  tmp/cprefresh.o tmp/cprefresh_ass.o |bin                   
+	$(CC) $(CFLAGSNO) -o bin/myplayhrt_c4 src/myplayhrt_c4.c tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o -lasound -lpthread -lrt -lm
+
+bin/bufhrt_c4: src/version.h tmp/net.o src/bufhrt_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGSNO) -o bin/bufhrt_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/bufhrt_c4.c -lpthread -lrt -lm
+
+bin/music2nf_c4: src/version.h src/nf_io.h src/music2nf_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGSNO) -o bin/music2nf_c4 src/music2nf_c4.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
 
 clean: 
 	rm -rf src/version.h bin tmp

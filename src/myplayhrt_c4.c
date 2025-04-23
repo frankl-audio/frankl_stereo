@@ -318,6 +318,17 @@ int printsstat(long* sstat) {
     return 0;
 }
 
+int printticks(long* liticks, long tcount) {
+    long i;
+    FILE *out;
+    out = fopen("/cache/liticks.g", "w");
+    fprintf(out, "\n# ticks to wait\n\nl := [");
+    for (i=0; i<tcount && i<1000000; i++) 
+         fprintf(out, "%ld, ", liticks[i]);
+    fprintf(out, "];\n\n"); 
+    fclose(out);
+    return 0;
+}
 /* difference t2 - t1 for data in timespec in ns */
 inline long difftimens(struct timespec t1, struct timespec t2)
 { 
@@ -370,12 +381,14 @@ int main(int argc, char *argv[])
          count, badloops, badreads, readmissing;
     //long  avgav, checkav;
     long mtick, etick;
+    long ctick, posticks=0, negticks=0, minpticks=10000000, d, liticks[1000000];
     long *sstat;
     long long icount, ocount, badframes;
     void *buf, *iptr, *tbuf, *tbufs[1024];
     long mtime, ctime, csec, tcount;
     double nsec, ntick;
     double looperr, extraerr, extrabps;
+    double addloopfactor;
     //double morebps;
     snd_pcm_t *pcm_handle;
     snd_pcm_hw_params_t *hwparams;
@@ -388,7 +401,7 @@ int main(int argc, char *argv[])
     //snd_pcm_sframes_t avail;
     const snd_pcm_channel_area_t *areas;
     //double checktime;
-    long corr;
+    long corr, nr;
     /* variables for shared memory input */
     char **fname, *fnames[100], **tmpname, *tmpnames[100], **mem, *mems[100],
          *ptr;
@@ -592,6 +605,7 @@ int main(int argc, char *argv[])
     extraerr = extraerr/(extraerr+extrabps);
     nsec = 1000000000*extraerr/loopspersec;
     ntick = nsec*3/125;
+    //ntick = nsec/41.66815977572529305916759767569;
 //printf(" nsec = %lf   ntick = %lf \n", nsec, ntick);
     if (slowcp) csec = (int)(nsec / (8*nrcp));
     if (verbose) {
@@ -824,6 +838,20 @@ int main(int argc, char *argv[])
       ctime = gettime();
       nsloopfactor = 1.0*10000000/(ctime-mtime-50);
 
+      mtime = gettime();
+      nr = 500000000;
+      __asm__ __volatile__ (
+             "mov x8, #0 \n\t"
+      ".ALOOP: \n\t"
+             "add x8, x8, 1 \n\t"
+             "cmp x8, %[et] \n\t"
+             "blt .ALOOP \n\t"
+      :
+      : [et] "r" (nr)
+      : "x8" );
+      ctime = gettime();
+      addloopfactor = 1.0*500000000/(ctime-mtime-70);
+//printf("\naddloopfactor = %lf\n", addloopfactor);
       count = 1;
       /* set start time (- nsec) */
       mtime = gettime();
@@ -855,6 +883,10 @@ int main(int argc, char *argv[])
                   tmpname++;
               }
               if (sstat) printsstat(sstat);
+              snd_pcm_drain(pcm_handle);
+              snd_pcm_close(pcm_handle);
+  //printf("\n pos ticks: %ld  (min %ld) neg ticks: %ld \n", posticks, minpticks, negticks);
+  //printticks(liticks, tcount);
               exit(0);
           }
           /* write shared memory content hardware buffer  */
@@ -908,6 +940,7 @@ int main(int argc, char *argv[])
              }  */
              /* etick is tick to wait for before commit  */
              etick = mtick + (long)(round(tcount*ntick));
+ 
              /* The isb mrs command  takes 23.3608 ns while the tick counter
                 is updated every 41.6667 ns (24MHz)
                 the add x8 line takes 1.11415 ns
@@ -959,7 +992,44 @@ int main(int argc, char *argv[])
                     "blt .LOOP \n\t"
              :
              : [et] "r" (etick)
-             : "x7" ); */
+             : "x7" );*/ 
+
+/*   __asm__ __volatile__("isb\nmrs %0, cntvct_el0" : "=r"(ctick));
+   d = etick - ctick;
+   if (d > 0)
+      posticks += d;
+   else
+      negticks -= d;
+   if (tcount<=1000000)
+      liticks[tcount-1] = d;
+   if (d>0 && d < minpticks)
+      minpticks = d;   */
+
+             /*ctime = gettime();
+             nr = (long)((1.0*(mtime  + shift - ctime) + tcount*nsec)*addloopfactor);
+             if (nr > 1000) {
+                  nr -= 1000;
+                  __asm__ __volatile__ (
+                         "mov x8, #0 \n\t"
+                  ".CLOOP1: \n\t"
+                         "add x8, x8, 1 \n\t"
+                         "cmp x8, %[et] \n\t"
+                         "blt .CLOOP1 \n\t"
+                  :
+                  : [et] "r" (nr)
+                  : "x8" );
+                  ctime = gettime();
+                  nr = (long)((1.0*(mtime  + shift - ctime) + tcount*nsec)*addloopfactor);
+             };
+             __asm__ __volatile__ (
+                    "mov x8, #0 \n\t"
+             ".CLOOP: \n\t"
+                    "add x8, x8, 1 \n\t"
+                    "cmp x8, %[et] \n\t"
+                    "blt .CLOOP \n\t"
+             :
+             : [et] "r" (nr)
+             : "x8" ); */
              snd_pcm_mmap_commit(pcm_handle, offset, frames);
              count++;
           }

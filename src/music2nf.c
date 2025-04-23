@@ -441,11 +441,6 @@ int main(int argc, char *argv[])
     ptmp = buf;
     clock_gettime(CLOCK_MONOTONIC, &mtime);
     for (sy = 0, i = nloops; i; i--) {
-        mtime.tv_nsec += nsec;
-        if (mtime.tv_nsec > 999999999) {
-          mtime.tv_nsec -= 1000000000;
-          mtime.tv_sec++;
-        }
         /* maybe refresh output chunk before sleep */
         if (outcopies > 0) {
             obufs[0] = ptmp;
@@ -466,6 +461,11 @@ int main(int argc, char *argv[])
             }
         } else {
             refreshmem((char*)ptmp, bsize);
+        }
+        mtime.tv_nsec += nsec;
+        if (mtime.tv_nsec > 999999999) {
+          mtime.tv_nsec -= 1000000000;
+          mtime.tv_sec++;
         }
         while (clock_nanosleep(CLOCK_MONOTONIC, 
                                TIMER_ABSTIME, &mtime, NULL) != 0) ;

@@ -620,8 +620,11 @@ int main(int argc, char *argv[])
     }
     /* read input block */
     memclean((char*)inp, nch*sizeof(double)*mlen);
-    if (sndfile) 
+    if (sndfile) {
         mlen = sf_readf_double(sndfile, inp, mlen);
+        //refresh64bit_aa64((void*)inp, nch*mlen);
+        refreshmem((void*)inp, nch*mlen*sizeof(double));
+    }
     else if (nfinfo) {
         if (mlen == blen) {
              memclean((char*)ibuf, PS);

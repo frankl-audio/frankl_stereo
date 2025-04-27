@@ -31,7 +31,7 @@ bin/volrace: src/version.h src/volrace.c tmp/cprefresh.o tmp/cprefresh_ass.o |bi
 tmp/net.o: src/net.h src/net.c |tmp 
 	$(CC) $(CFLAGS) -c -o tmp/net.o src/net.c
 
-tmp/cprefresh_ass.o: src/cprefresh_default.s src/cprefresh_vfp.s src/cprefresh_arm.s |tmp 
+tmp/cprefresh_ass.o: src/cprefresh_default.s src/cprefresh_vfp.s src/cprefresh_aa64.s src/cprefresh_x8664.s src/cprefresh_arm.s |tmp 
 	if [ $(REFRESH) = "" ]; then \
 	  $(CC) -c $(CFLAGSNO) -o tmp/cprefresh_ass.o src/cprefresh_default.s; \
 	elif [ $(REFRESH) = "ARM" ]; then \
@@ -114,6 +114,9 @@ bin/myplayhrt_c4: src/myplayhrt_c4.c src/version.h tmp/net.o  tmp/cprefresh.o tm
 
 bin/bufhrt_c4: src/version.h tmp/net.o src/bufhrt_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/bufhrt_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/bufhrt_c4.c -lpthread -lrt -lm
+
+bin/forimprove_c4: src/version.h tmp/net.o src/forimprove_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGSNO) -o bin/forimprove_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/forimprove_c4.c -lpthread -lrt -lm
 
 bin/music2nf_c4: src/version.h src/nf_io.h src/music2nf_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/music2nf_c4 src/music2nf_c4.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt

@@ -15,8 +15,8 @@
 int main(int argc, char *argv[])
 {
     double inp[1024], *ip;
-    int32_t out[256], *op;
-    int i, mlen, nrcp;
+    int32_t out[256], *op, pm = 1;
+    int i, mlen, nrcp, nz, post;
     void *tbufs[1024];
 
     nrcp = 0;
@@ -37,15 +37,34 @@ int main(int argc, char *argv[])
     tbufs[0] = out;
     tbufs[nrcp] = out;
 
-
+    /* pre- and append 5 sec of silence */
+    nz = 1875;
+    mlen = 1024;
+    post = 0;
     while (1) {
        memclean((char*)inp, 8192);  
-       mlen = fread((void*)inp, sizeof(double), 1024, stdin);
-       if (mlen == 0) break;
+       if (nz) {
+          for (i = 0; i< 1024; i++) ((double *)inp)[i] = 0.0;
+          nz--;
+       } else if (post) break;
+       else {
+          mlen = fread((void*)inp, sizeof(double), 1024, stdin);
+       }
+       if (mlen == 0) {
+          post = 1;
+          for (i = 0; i< 1024; i++) ((double *)inp)[i] = 0.0;
+          nz = 1874;
+          mlen = 1024;
+       }
        memclean((char*)out, 1024);
        for (i=mlen/8, ip=inp, op=out; i; ip+=8, op+=2, i--) {
          *op = (int32_t) (*ip * 2147483647);
          *(op+1) = (int32_t) (*(ip+1) * 2147483647);
+         /* avoid zero samples on left channel */
+         if (*op == 0) {
+             *op = pm;
+             pm = -pm;
+         }
        }
        if (nrcp) {
            for (i=1; i <= nrcp; i++) {

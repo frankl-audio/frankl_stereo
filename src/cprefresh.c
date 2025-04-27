@@ -102,6 +102,8 @@ inline void cprefresh(char* dest, char* ptr, long n)
 inline void refreshmem_aa64(void* addr, int n);
 inline void memclean_aa64(void* addr, int n);
 inline void cprefresh_aa64(void* addr, int n, void* dest);
+inline void refresh64bit_aa64(void* addr, int n);
+inline void cp64bit_aa64(void* addr, int n, void* dest);
 
 /* nb is number of bytes */
 inline void refreshmem(char* ptr, long nb) {
@@ -114,7 +116,8 @@ inline void refreshmem(char* ptr, long nb) {
      vp = (void*)ptr;
   }
   n = (nb-off)/8;
-  refreshmem_aa64(vp, n);
+  //refreshmem_aa64(vp, n);
+  refresh64bit_aa64(vp, n);
 }
 
 inline void refreshmems(char* ptr, long nb, long k) {
@@ -155,7 +158,8 @@ inline void cprefresh(char* dest, char* ptr, long n)
   } else {
       /* both pointers must get 8-byte aligned */
       n0 = n/8;
-      cprefresh_aa64((void*)ptr, n0, (void*)dest);
+      //cprefresh_aa64((void*)ptr, n0, (void*)dest);
+      cp64bit_aa64((void*)ptr, n0, (void*)dest);
       n0 *= 8;
       for (; n0 < n; n0++) dest[n0] = ptr[n0];
   }

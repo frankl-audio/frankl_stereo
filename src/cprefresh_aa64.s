@@ -61,6 +61,100 @@ refreshmem_aa64:
 	.cfi_endproc
 
 
+/* refresh 64 bit data in place, here we copy values from 24 registers to destination */
+	.arch armv8-a
+	.text
+	.align	2
+	.global	refresh64bit_aa64
+	.type	refresh64bit_aa64, %function
+refresh64bit_aa64:
+	.cfi_startproc
+        mov     x4, x0
+        mov     x5, #1
+.SLOOP:
+        cmp     x1, x5
+        blt     .SRET
+        eor     v0.8b, v0.8b, v0.8b
+        eor     v1.8b, v1.8b, v1.8b
+        eor     v2.8b, v2.8b, v2.8b
+        eor     v3.8b, v3.8b, v3.8b
+        eor     v4.8b, v4.8b, v4.8b
+        eor     v5.8b, v5.8b, v5.8b
+        eor     v6.8b, v6.8b, v6.8b
+        eor     v7.8b, v7.8b, v7.8b
+        eor     v16.8b, v16.8b, v16.8b
+        eor     v17.8b, v17.8b, v17.8b
+        eor     v18.8b, v18.8b, v18.8b
+        eor     v19.8b, v19.8b, v19.8b
+        eor     v20.8b, v20.8b, v20.8b
+        eor     v21.8b, v21.8b, v21.8b
+        eor     v22.8b, v22.8b, v22.8b
+        eor     v23.8b, v23.8b, v23.8b
+        eor     v24.8b, v24.8b, v24.8b
+        eor     v25.8b, v25.8b, v25.8b
+        eor     v26.8b, v26.8b, v26.8b
+        eor     v27.8b, v27.8b, v27.8b
+        eor     v28.8b, v28.8b, v28.8b
+        eor     v29.8b, v29.8b, v29.8b
+        eor     v30.8b, v30.8b, v30.8b
+        eor     v31.8b, v31.8b, v31.8b
+        ldr     d0, [x4]
+        str     xzr, [x4]
+        orr     v1.8b, v0.8b, v0.8b
+        orr     v2.8b, v0.8b, v0.8b
+        orr     v3.8b, v0.8b, v0.8b
+        orr     v4.8b, v0.8b, v0.8b
+        orr     v5.8b, v0.8b, v0.8b
+        orr     v6.8b, v0.8b, v0.8b
+        orr     v7.8b, v0.8b, v0.8b
+        orr     v16.8b, v0.8b, v0.8b
+        orr     v17.8b, v0.8b, v0.8b
+        orr     v18.8b, v0.8b, v0.8b
+        orr     v19.8b, v0.8b, v0.8b
+        orr     v20.8b, v0.8b, v0.8b
+        orr     v21.8b, v0.8b, v0.8b
+        orr     v22.8b, v0.8b, v0.8b
+        orr     v23.8b, v0.8b, v0.8b
+        orr     v24.8b, v0.8b, v0.8b
+        orr     v25.8b, v0.8b, v0.8b
+        orr     v26.8b, v0.8b, v0.8b
+        orr     v27.8b, v0.8b, v0.8b
+        orr     v28.8b, v0.8b, v0.8b
+        orr     v29.8b, v0.8b, v0.8b
+        orr     v30.8b, v0.8b, v0.8b
+        orr     v31.8b, v0.8b, v0.8b
+        str     d0, [x4]
+        str     d1, [x4]
+        str     d2, [x4]
+        str     d3, [x4]
+        str     d4, [x4]
+        str     d5, [x4]
+        str     d6, [x4]
+        str     d7, [x4]
+        str     d16, [x4]
+        str     d17, [x4]
+        str     d18, [x4]
+        str     d19, [x4]
+        str     d20, [x4]
+        str     d21, [x4]
+        str     d22, [x4]
+        str     d23, [x4]
+        str     d24, [x4]
+        str     d25, [x4]
+        str     d26, [x4]
+        str     d27, [x4]
+        str     d28, [x4]
+        str     d29, [x4]
+        str     d30, [x4]
+        str     d31, [x4]
+        add     x4, x4, 8
+        add     x5, x5, 1
+        b       .SLOOP
+.SRET:
+        ret
+	.cfi_endproc
+
+
 
 /* similar, but writing to different location */
 	.text
@@ -114,6 +208,102 @@ cprefresh_aa64:
 .CRET:
         ret
 	.cfi_endproc
+
+/* copy 64 bit data, here we copy values from 24 registers to destination */
+	.arch armv8-a
+	.text
+	.align	2
+	.global	cp64bit_aa64
+	.type	cp64bit_aa64, %function
+cp64bit_aa64:
+	.cfi_startproc
+        mov     x4, x0
+        mov     x6, x2
+        mov     x5, #1
+.TLOOP:
+        cmp     x1, x5
+        blt     .TRET
+        eor     v0.8b, v0.8b, v0.8b
+        eor     v1.8b, v1.8b, v1.8b
+        eor     v2.8b, v2.8b, v2.8b
+        eor     v3.8b, v3.8b, v3.8b
+        eor     v4.8b, v4.8b, v4.8b
+        eor     v5.8b, v5.8b, v5.8b
+        eor     v6.8b, v6.8b, v6.8b
+        eor     v7.8b, v7.8b, v7.8b
+        eor     v16.8b, v16.8b, v16.8b
+        eor     v17.8b, v17.8b, v17.8b
+        eor     v18.8b, v18.8b, v18.8b
+        eor     v19.8b, v19.8b, v19.8b
+        eor     v20.8b, v20.8b, v20.8b
+        eor     v21.8b, v21.8b, v21.8b
+        eor     v22.8b, v22.8b, v22.8b
+        eor     v23.8b, v23.8b, v23.8b
+        eor     v24.8b, v24.8b, v24.8b
+        eor     v25.8b, v25.8b, v25.8b
+        eor     v26.8b, v26.8b, v26.8b
+        eor     v27.8b, v27.8b, v27.8b
+        eor     v28.8b, v28.8b, v28.8b
+        eor     v29.8b, v29.8b, v29.8b
+        eor     v30.8b, v30.8b, v30.8b
+        eor     v31.8b, v31.8b, v31.8b
+        ldr     d0, [x4]
+        str     xzr, [x6]
+        orr     v1.8b, v0.8b, v0.8b
+        orr     v2.8b, v0.8b, v0.8b
+        orr     v3.8b, v0.8b, v0.8b
+        orr     v4.8b, v0.8b, v0.8b
+        orr     v5.8b, v0.8b, v0.8b
+        orr     v6.8b, v0.8b, v0.8b
+        orr     v7.8b, v0.8b, v0.8b
+        orr     v16.8b, v0.8b, v0.8b
+        orr     v17.8b, v0.8b, v0.8b
+        orr     v18.8b, v0.8b, v0.8b
+        orr     v19.8b, v0.8b, v0.8b
+        orr     v20.8b, v0.8b, v0.8b
+        orr     v21.8b, v0.8b, v0.8b
+        orr     v22.8b, v0.8b, v0.8b
+        orr     v23.8b, v0.8b, v0.8b
+        orr     v24.8b, v0.8b, v0.8b
+        orr     v25.8b, v0.8b, v0.8b
+        orr     v26.8b, v0.8b, v0.8b
+        orr     v27.8b, v0.8b, v0.8b
+        orr     v28.8b, v0.8b, v0.8b
+        orr     v29.8b, v0.8b, v0.8b
+        orr     v30.8b, v0.8b, v0.8b
+        orr     v31.8b, v0.8b, v0.8b
+        str     d0, [x6]
+        str     d1, [x6]
+        str     d2, [x6]
+        str     d3, [x6]
+        str     d4, [x6]
+        str     d5, [x6]
+        str     d6, [x6]
+        str     d7, [x6]
+        str     d16, [x6]
+        str     d17, [x6]
+        str     d18, [x6]
+        str     d19, [x6]
+        str     d20, [x6]
+        str     d21, [x6]
+        str     d22, [x6]
+        str     d23, [x6]
+        str     d24, [x6]
+        str     d25, [x6]
+        str     d26, [x6]
+        str     d27, [x6]
+        str     d28, [x6]
+        str     d29, [x6]
+        str     d30, [x6]
+        str     d31, [x6]
+        add     x4, x4, 8
+        add     x6, x6, 8
+        add     x5, x5, 1
+        b       .TLOOP
+.TRET:
+        ret
+	.cfi_endproc
+
 
 
 /* similar, but zero and clean the interval */

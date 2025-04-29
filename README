@@ -37,14 +37,15 @@ Overview:
       read sound file or shared memory and output samples as 64-bit
       floating point numbers
 
- - cleancp and cleancp2
-      make a cleaner copy of (audio and other) files
-
  - scripts/play_*
       example scripts for playing music with programs from this package
  
  - scripts/improvefile
       a tool to enhance audio quality of a music file
+
+ - a few extra programs myplayhrt and *_c4 and by4 for the authors stereo
+   setup (less well documented, may get incompatible changes, contain
+   specific assembler code for Odroid C4)
 
 The main idea of 'playhrt' and 'bufhrt' is that data are written in
 very regular intervals using the highres timer functionality of the 

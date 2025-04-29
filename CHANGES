@@ -1,5 +1,24 @@
         Changes between published versions
 
+0.9 to 0.9.2
+
+- newer assembler functions for aarch64 for refreshing and cleaning memory,
+  shuffles date through many floating point registers. Clear further
+  improvement on authors setup with Odroid C4.
+
+- several *_c4 programs for authors setup with Odroid C4, uses assembler
+  code for precise timing (variant should work on Raspi 4).
+
+- utility by4 for authors setup (64 bit float in 192k to 32 bit signed int
+  in 48k, adds silence and changes zero samples)
+
+- use new options and add explanations in example improvefile script
+
+- added new option --number-copies to various programs (or --out-copies
+  for bufhrt); here refreshs are done through a loop of temporary buffers.
+
+- added options for slower refreshs in RAM to bufhrt
+
 0.8 to 0.9
 
 - new example script play_resample.

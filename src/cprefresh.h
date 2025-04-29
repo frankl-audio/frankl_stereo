@@ -35,6 +35,7 @@ inline void memclean_aa64(void* addr, int n);
 inline void cprefresh_aa64(void* addr, int n, void* dest);
 inline void refresh64bit_aa64(void* addr, int n);
 inline void cp64bit_aa64(void* addr, int n, void* dest);
+inline void clean64bit_aa64(void* addr, int n);
 
 #endif
 

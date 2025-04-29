@@ -104,6 +104,7 @@ inline void memclean_aa64(void* addr, int n);
 inline void cprefresh_aa64(void* addr, int n, void* dest);
 inline void refresh64bit_aa64(void* addr, int n);
 inline void cp64bit_aa64(void* addr, int n, void* dest);
+inline void clean64bit_aa64(void* addr, int n);
 
 /* nb is number of bytes */
 inline void refreshmem(char* ptr, long nb) {
@@ -143,7 +144,7 @@ inline void memclean(char* ptr, long n)
     for (i=0; i < off; i++) ptr[i] = 0;
   }
   n0 = (n-off)/8;
-  memclean_aa64((void*)(ptr+off), n0);
+  clean64bit_aa64((void*)(ptr+off), n0);
   n0 *= 8;
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }

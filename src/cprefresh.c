@@ -172,6 +172,9 @@ inline void cprefresh(char* dest, char* ptr, long n)
 
 /* n is number of 8 byte quad words */
 inline void refreshmem_x8664(void* addr, int n);
+inline void refresh64_x8664(void* addr, int n);
+inline void cp64_x8664(void* addr, int n, void* dest);
+inline void memclean64_x8664(void* addr, int n);
 
 /* nb is number of bytes */
 inline void refreshmem(char* ptr, long nb) {
@@ -184,7 +187,8 @@ inline void refreshmem(char* ptr, long nb) {
      vp = (void*)ptr;
   }
   n = (nb-off)/8;
-  refreshmem_x8664(vp, n);
+  //refreshmem_x8664(vp, n);
+  refresh64_x8664(vp, n);
 }
 inline void refreshmems(char* ptr, long nb, long k) {
   long n, off, j;
@@ -197,22 +201,38 @@ inline void refreshmems(char* ptr, long nb, long k) {
   }
   n = (nb-off)/8;
   for(j=k; j; j--)
-      refreshmem_x8664(vp, n);
+      //refreshmem_x8664(vp, n);
+      refresh64_x8664(vp, n);
 }
 
-inline void memclean(char* ptr, long nb)
-{
-  long i;
-  for (i=0; i < nb; i++)
-      ptr[i] = 0;
-  refreshmem(ptr, nb);
+inline void memclean(char* ptr, long nb) {
+  long n, off;
+  void *vp;
+  char *tp;
+  off = (long)ptr % 8;
+  if (off != 0){
+     vp = (void*)ptr + 8 - off;
+     for (tp=ptr; tp<(char*)vp; tp++)
+        *tp = 0;
+  } else {
+     vp = (void*)ptr;
+  }
+  n = (nb-off)/8;
+  //refreshmem_x8664(vp, n);
+  memclean64_x8664(vp, n);
+  for (tp=ptr+(off+8*n); tp<ptr+nb; tp++)
+     *tp = 0;
 }
 
 inline void cprefresh(char* dest, char* ptr, long n)
 {
-  memclean(dest, n);
-  memcpy(dest, ptr, n);
-  refreshmem(dest, n);
+  if ((long)ptr % 8 !=0 || (long)dest % 8 != 0 || n % 8 != 0) {
+      memclean(dest, n);
+      memcpy(dest, ptr, n);
+      refreshmem(dest, n);
+  } else {
+      cp64_x8664((void*)ptr, n/8, (void*)dest);
+  }
 }
 #else
 #include <stdint.h>

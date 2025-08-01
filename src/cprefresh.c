@@ -110,12 +110,12 @@ inline void clean64bit_aa64(void* addr, int n);
 inline void refreshmem(char* ptr, long nb) {
   long n, off;
   void *vp;
+  /* ignore first and last bytes if not 8-byte aligned */
   off = (long)ptr % 8;
   if (off != 0){
-     vp = (void*)ptr + 8 - off;
-  } else {
-     vp = (void*)ptr;
+     off = 8-off;
   }
+  vp = (void*)ptr + off;
   n = (nb-off)/8;
   //refreshmem_aa64(vp, n);
   refresh64bit_aa64(vp, n);
@@ -124,12 +124,12 @@ inline void refreshmem(char* ptr, long nb) {
 inline void refreshmems(char* ptr, long nb, long k) {
   long n, off, j;
   void *vp;
+  /* ignore first and last bytes if not 8-byte aligned */
   off = (long)ptr % 8;
   if (off != 0){
-     vp = (void*)ptr + 8 - off;
-  } else {
-     vp = (void*)ptr;
+     off = 8-off;
   }
+  vp = (void*)ptr + off;
   n = (nb-off)/8;
   for(j=k; j; j--)
       refreshmem_aa64(vp, n);
@@ -138,6 +138,7 @@ inline void refreshmems(char* ptr, long nb, long k) {
 inline void memclean(char* ptr, long n)
 {
   int i, off, n0;
+  /* handle first and last bytes separately, if not 8-byte aligned */
   off = (unsigned long)ptr % 8;
   if (off > 0) {
     off = 8-off;
@@ -157,9 +158,8 @@ inline void cprefresh(char* dest, char* ptr, long n)
       memcpy(dest, ptr, n);
       refreshmem(dest, n);
   } else {
-      /* both pointers must get 8-byte aligned */
+      /* both pointers must be 8-byte aligned */
       n0 = n/8;
-      //cprefresh_aa64((void*)ptr, n0, (void*)dest);
       cp64bit_aa64((void*)ptr, n0, (void*)dest);
       n0 *= 8;
       for (; n0 < n; n0++) dest[n0] = ptr[n0];
@@ -180,60 +180,61 @@ inline void memclean64_x8664(void* addr, int n);
 inline void refreshmem(char* ptr, long nb) {
   long n, off;
   void *vp;
+  /* ignore first and last bytes if not 8-byte aligned */
   off = (long)ptr % 8;
   if (off != 0){
-     vp = (void*)ptr + 8 - off;
-  } else {
-     vp = (void*)ptr;
+     off = 8-off;
   }
+  vp = (void*)ptr + off;
   n = (nb-off)/8;
-  //refreshmem_x8664(vp, n);
   refresh64_x8664(vp, n);
 }
+
 inline void refreshmems(char* ptr, long nb, long k) {
   long n, off, j;
   void *vp;
+  /* ignore first and last bytes if not 8-byte aligned */
   off = (long)ptr % 8;
   if (off != 0){
-     vp = (void*)ptr + 8 - off;
-  } else {
-     vp = (void*)ptr;
+     off = 8-off;
   }
+  vp = (void*)ptr + off;
   n = (nb-off)/8;
   for(j=k; j; j--)
-      //refreshmem_x8664(vp, n);
       refresh64_x8664(vp, n);
 }
 
-inline void memclean(char* ptr, long nb) {
-  long n, off;
-  void *vp;
-  char *tp;
-  off = (long)ptr % 8;
-  if (off != 0){
-     vp = (void*)ptr + 8 - off;
-     for (tp=ptr; tp<(char*)vp; tp++)
-        *tp = 0;
-  } else {
-     vp = (void*)ptr;
+inline void memclean(char* ptr, long n)
+{
+  long i, off, n0;
+  /* handle first and last bytes separately, if not 8-byte aligned */
+  off = (unsigned long)ptr % 8;
+  if (off > 0) {
+    off = 8-off;
+    for (i=0; i < off; i++) ptr[i] = 0;
   }
-  n = (nb-off)/8;
-  //refreshmem_x8664(vp, n);
-  memclean64_x8664(vp, n);
-  for (tp=ptr+(off+8*n); tp<ptr+nb; tp++)
-     *tp = 0;
+  n0 = (n-off)/8;
+  memclean64_x8664((void*)(ptr+off), n0);
+  n0 *= 8;
+  for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
 inline void cprefresh(char* dest, char* ptr, long n)
 {
-  if ((long)ptr % 8 !=0 || (long)dest % 8 != 0 || n % 8 != 0) {
+  long n0;
+  if (((unsigned long)ptr % 8) != 0 || ((unsigned long)dest % 8) != 0) {
       memclean(dest, n);
       memcpy(dest, ptr, n);
       refreshmem(dest, n);
   } else {
-      cp64_x8664((void*)ptr, n/8, (void*)dest);
+      /* both pointers must be 8-byte aligned */
+      n0 = n/8;
+      cp64_x8664((void*)ptr, n0, (void*)dest);
+      n0 *= 8;
+      for (; n0 < n; n0++) dest[n0] = ptr[n0];
   }
 }
+
 #else
 #include <stdint.h>
 /* default version in C, compile with -O0, such that this is not

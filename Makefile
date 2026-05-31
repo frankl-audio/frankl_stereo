@@ -118,8 +118,13 @@ bin/bufhrt_c4: src/version.h tmp/net.o src/bufhrt_c4.c tmp/cprefresh.o tmp/cpref
 bin/forimprove_c4: src/version.h tmp/net.o src/forimprove_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/forimprove_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/forimprove_c4.c -lpthread -lrt -lm
 
+bin/forimprovedirect_c4: src/version.h tmp/net.o src/forimprovedirect_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGSNO) -o bin/forimprovedirect_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/forimprovedirect_c4.c -lpthread -lrt -lm
+
 bin/music2nf_c4: src/version.h src/nf_io.h src/music2nf_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/music2nf_c4 src/music2nf_c4.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
+
+c4: bin/by4 bin/myplayhrt_c4 bin/bufhrt_c4 bin/forimprove_c4 bin/forimprovedirect_c4 bin/music2nf_c4
 
 clean: 
 	rm -rf src/version.h bin tmp

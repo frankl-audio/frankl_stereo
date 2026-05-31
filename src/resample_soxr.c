@@ -183,6 +183,17 @@ void usage( ) {
 "      times through  cleaned temporary buffers in RAM.\n"
 "      The default is 0. \n"
 "\n"
+"  --number-copies-input=intnum, -C intnum\n"
+"      same as --number-copies but applied to the just read input data.\n"
+"      This may be in particular interesting with the --realtime option.\n"
+"      The default is 0. \n"
+"\n"
+"  --realtime=floatval, -T floatval\n"
+"      starts a timer for reading the input chunks. The given value is the \n"
+"      number of seconds for reading the sample rate many frames, hence \n"
+"      typically very close to 1.0. \n"
+"      The default is 0.0 which does not enable this timer. \n"
+"\n"
 "  --help, -h\n"
 "      show this help.\n"
 "\n"
@@ -289,7 +300,7 @@ void sanitizeraceparams(int* delay, double* att, long nch){
 int main(int argc, char *argv[])
 {
   /* variables for the resampler */
-  double inrate, outrate, phase, bwidth, prec, OLEN;
+  double inrate, outrate, phase, bwidth, prec, rt, OLEN;
   double *inp, *out;
   char ibuf[PS];
   short *sptr;
@@ -298,7 +309,8 @@ int main(int argc, char *argv[])
   double *dptr;
   int32_t *iout;
   int verbose, optc, fd, out32, bpf, bits;
-  long intotal = 0, outtotal = 0, blen, mlen, check, i, nch, nfid;
+  long intotal = 0, outtotal = 0, blen, mlen, check, i, nch, nfid, nsec;
+  long dtime;
   soxr_t soxr;
   soxr_error_t error;
   size_t indone, outdone;
@@ -316,8 +328,12 @@ int main(int argc, char *argv[])
   char *pnam;
   struct nfrec *nfr;
   /* buffer for optional output refresh */
-  long nrcp, rlen;
-  void *tbufs[1024];
+  long nrcp, nricp, rlen;
+  void *tbufs[512];
+  void *tibufs[512];
+  struct timespec mtime;
+  struct timespec currtime;
+  long cnt;
 
   for(i=0; i<1024; carry[i] = 0.0, i++);
 
@@ -345,9 +361,11 @@ int main(int argc, char *argv[])
       {"nfid", required_argument, 0, 'N' },
       {"start", required_argument, 0, 's' },
       {"until", required_argument, 0, 'u' },
+      {"realtime", required_argument, 0, 'T' },
       {"number-frames", required_argument, 0, 'n' },
       {"buffer-length", required_argument, 0, 'b' },
       {"number-copies", required_argument, 0, 'R' },
+      {"number-copies-input", required_argument, 0, 'C' },
       {"toint32", no_argument, 0, 'I' },
       {"verbose", no_argument, 0, 'p' },
       {"version", no_argument, 0, 'V' },
@@ -361,6 +379,7 @@ int main(int argc, char *argv[])
   phase = 25.0; 
   bwidth = 0.0;
   prec = 33.0;
+  rt = 0.0;
   nch = 2;
   blen = 8192;
   fnam = NULL;
@@ -381,8 +400,9 @@ int main(int argc, char *argv[])
   pnam = NULL;
   verbose = 0;
   nrcp = 0;
+  nricp = 0;
   while ((optc = getopt_long(argc, argv, 
-          "M:N:i:o:P:B:e:r:v:d:a:F:l:c:f:m:s:u:n:R:b:IpVh",
+          "M:N:i:o:P:B:e:T:r:v:d:a:F:l:c:f:m:s:u:n:C:R:b:IpVh",
           longoptions, &optind)) != -1) {
       switch (optc) {
       case 'v':
@@ -412,6 +432,9 @@ int main(int argc, char *argv[])
         if (prec < 16.0 || prec > 33.0)
            prec = 33.0;
         break;
+      case 'T':
+        rt = atof(optarg);
+        break;
       case 'c':
         nch = atoi(optarg);
         break;
@@ -426,7 +449,11 @@ int main(int argc, char *argv[])
         break;
       case 'R':
         nrcp = atoi(optarg);
-        if (nrcp < 0 || nrcp > 1000) nrcp = 0;
+        if (nrcp < 0 || nrcp > 510) nrcp = 0;
+        break;
+      case 'C':
+        nricp = atoi(optarg);
+        if (nricp < 0 || nricp > 510) nricp = 0;
         break;
       case 'b':
         blen = atoi(optarg);
@@ -567,6 +594,15 @@ int main(int argc, char *argv[])
 
   /* allocate buffer */
   inp = (double*) malloc(nch*blen*sizeof(double));
+  if (nricp) {
+      /* temporary buffers */
+      for (i=1; i < nricp; i++) {
+          if (posix_memalign(tibufs+i, 4096, nch*blen*sizeof(double))) {
+              fprintf(stderr, "resample_soxr: Cannot allocate buffer for cleaning.\n");
+              exit(8);
+          }
+      }
+  }
   OLEN = (long)(blen*(outrate/inrate+1.0));
   out = (double*) malloc(nch*OLEN*sizeof(double));
   if (out32) 
@@ -609,8 +645,20 @@ int main(int argc, char *argv[])
     exit(1);
   }
 
+  /* we use a timer for reading the input in realtime mode */
+  if (rt != 0.0) {
+    nsec = (rt*blen/inrate)*1000000000;
+    clock_gettime(CLOCK_MONOTONIC, &mtime);
+    mtime.tv_nsec += nsec;
+    if (mtime.tv_nsec > 999999999) {
+      mtime.tv_nsec -= 1000000000;
+      mtime.tv_sec++;
+    }
+  }
   /* we read from stdin or file/shared mem/nf file until eof or total (if >0) and write to stdout */
+  cnt = 0;
   while (1) {
+    cnt++;
     mlen = blen;
     if (total != 0) {
         if (intotal >= total)
@@ -620,10 +668,30 @@ int main(int argc, char *argv[])
     }
     /* read input block */
     memclean((char*)inp, nch*sizeof(double)*mlen);
+       
+    if (rt != 0.0) {
+      /* we check every 1000 loops if we are behind time and in that case
+         reset (for example after startup and filling buffers) */
+      if (cnt >= 1000) {
+        cnt = 0;
+        clock_gettime(CLOCK_MONOTONIC, &currtime);
+        dtime = ((mtime.tv_sec - currtime.tv_sec)*1000000000 + mtime.tv_nsec -currtime.tv_nsec)/1000;
+        if (verbose) {
+          fprintf(stderr, "\nmusec to wait in realtime mode: %ld \n", dtime);
+        }
+        if (dtime < -1000) {
+          clock_gettime(CLOCK_MONOTONIC, &mtime);
+          mtime.tv_nsec += nsec;
+          if (mtime.tv_nsec > 999999999) {
+            mtime.tv_nsec -= 1000000000;
+            mtime.tv_sec++;
+          }
+        }
+      }
+      clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
+    }
     if (sndfile) {
         mlen = sf_readf_double(sndfile, inp, mlen);
-        //refresh64bit_aa64((void*)inp, nch*mlen);
-        refreshmem((void*)inp, nch*mlen*sizeof(double));
     }
     else if (nfinfo) {
         if (mlen == blen) {
@@ -651,8 +719,19 @@ int main(int argc, char *argv[])
       free(inp);
       inp = NULL;
     }
-    /* call resampler */
-    refreshmem((char*)inp, nch*sizeof(double)*mlen);
+    /* call resampler, optionally clean input in memory */
+    if (nricp) {
+        rlen = nch*sizeof(double)*mlen;
+        tibufs[0] = (void*)inp;
+        tibufs[nricp] = (void*)inp;
+        for (i=1; i <= nricp; i++) {
+            memclean((char*)(tibufs[i]), rlen);
+            cprefresh((char*)(tibufs[i]), (char*)(tibufs[i-1]), rlen);
+            //memclean((char*)(tibufs[i-1]), rlen);
+        }
+    } else {
+        refreshmem((char*)inp, nch*sizeof(double)*mlen);
+    }
     error = soxr_process(soxr, inp, mlen, &indone,
                                out, OLEN, &outdone);
     if (mlen > indone) {
@@ -707,7 +786,7 @@ int main(int argc, char *argv[])
         for (i=1; i <= nrcp; i++) {
             memclean((char*)(tbufs[i]), rlen);
             cprefresh((char*)(tbufs[i]), (char*)(tbufs[i-1]), rlen);
-            memclean((char*)(tbufs[i-1]), rlen);
+            //memclean((char*)(tbufs[i-1]), rlen);
         }
     } else {
         refreshmem((char*)out, nch*sizeof(double)*outdone);
@@ -757,6 +836,13 @@ int main(int argc, char *argv[])
              }
            }
         }
+    }
+    if (rt != 0.0) {
+      mtime.tv_nsec += nsec;
+      if (mtime.tv_nsec > 999999999) {
+        mtime.tv_nsec -= 1000000000;
+        mtime.tv_sec++;
+      }
     }
   }
   soxr_delete(soxr);

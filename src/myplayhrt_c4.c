@@ -916,7 +916,7 @@ int main(int argc, char *argv[])
                      nsloop(csec);
                      memclean((char*)(tbufs[k]), ilen);
                      cprefresh((char*)(tbufs[k]), (char*)(tbufs[k-1]), ilen);
-                     memclean((char*)(tbufs[k-1]), ilen);
+                     //memclean((char*)(tbufs[k-1]), ilen);
                  }
              } else {
                  for (k=nrcp; k; k--) {

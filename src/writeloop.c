@@ -381,7 +381,7 @@ int main(int argc, char *argv[])
                for (i=1; i <= nrcp; i++) {
                    memclean((char*)(tbufs[i]), c);
                    cprefresh((char*)(tbufs[i]), (char*)(tbufs[i-1]), c);
-                   memclean((char*)(tbufs[i-1]), c);
+                   //memclean((char*)(tbufs[i-1]), c);
                }
            }
 
@@ -447,7 +447,7 @@ int main(int argc, char *argv[])
                   for (i=1; i <= nrcp; i++) {
                       memclean((char*)(tbufs[i]), c);
                       cprefresh((char*)(tbufs[i]), (char*)(tbufs[i-1]), c);
-                      memclean((char*)(tbufs[i-1]), c);
+                      //memclean((char*)(tbufs[i-1]), c);
                   }
               }
               ptr += c;

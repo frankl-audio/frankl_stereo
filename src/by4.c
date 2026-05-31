@@ -1,4 +1,4 @@
-/* reads 2-channel audio in 64 bit float samples and output every
+/* reads 2-channel audio in 64 bit float samples and outputs every
    fourth frame as int32 samples */
 /* we use this to reduce sample rate 192000 to 48000 with a signal
    that has no content above 24kHz */
@@ -12,10 +12,17 @@
 #include <sys/types.h>
 #include "cprefresh.h"
 
+/* presilence and postsilence can be added here (375 per second) */
+#define PRESILENCE 1875;
+#define POSTSILENCE 375;
+
 int main(int argc, char *argv[])
 {
     double inp[1024], *ip;
-    int32_t out[256], *op, pm = 1;
+    int32_t out[256], *op; 
+    /* with Topping D90 we could suppress some clicks by avoiding periods
+      of zero samples - now commented our for D900 */
+    //int32_t pml = 300, pmr = 300;
     int i, mlen, nrcp, nz, post;
     void *tbufs[1024];
 
@@ -37,8 +44,8 @@ int main(int argc, char *argv[])
     tbufs[0] = out;
     tbufs[nrcp] = out;
 
-    /* pre- and append 5 sec of silence */
-    nz = 1875;
+    /* pre- and append some silence */
+    nz = PRESILENCE;
     mlen = 1024;
     post = 0;
     while (1) {
@@ -52,8 +59,10 @@ int main(int argc, char *argv[])
        }
        if (mlen == 0) {
           post = 1;
+          nz = POSTSILENCE;
           for (i = 0; i< 1024; i++) ((double *)inp)[i] = 0.0;
-          nz = 1874;
+          /* counter for post-silence */ 
+          nz--;
           mlen = 1024;
        }
        memclean((char*)out, 1024);
@@ -61,16 +70,21 @@ int main(int argc, char *argv[])
          *op = (int32_t) (*ip * 2147483647);
          *(op+1) = (int32_t) (*(ip+1) * 2147483647);
          /* avoid zero samples on left channel */
+         /*
          if (*op == 0) {
-             *op = pm;
-             pm = -pm;
+             *op = pml;
+             pml = -pml;
          }
+         if (*(op+1) == 0) {
+             *(op+1) = pmr;
+             pmr = -pmr;
+         }
+         */
        }
        if (nrcp) {
            for (i=1; i <= nrcp; i++) {
                memclean((char*)(tbufs[i]), mlen);
                cprefresh((char*)(tbufs[i]), (char*)(tbufs[i-1]), mlen);
-               memclean((char*)(tbufs[i-1]), mlen);
            }
        }
        fwrite((void*)out, sizeof(int32_t), mlen/4, stdout);

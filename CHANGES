@@ -1,4 +1,18 @@
         Changes between published versions
+        
+0.9.2 to 0.9.3
+
+- new option --realtime for 'resample_soxr'. To be used when resample_soxr
+  is used in a playback chain; data are read slowly and just in time for 
+  the following programs in the chain.
+
+- new function 'forimprovedirect_c4' to be used with 'improvefile' on
+  Odroid C4. This does not use a large buffer for input data but read
+  and writes data slowly in turns.
+
+- some smaller fixes and polishing wrt. refreshing data (some variant 
+  of the x86_64 cleaning functions are now used in ConvoProxy's version
+  of bufhrt.
 
 0.9 to 0.9.2
 

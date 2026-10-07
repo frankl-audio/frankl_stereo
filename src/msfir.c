@@ -14,6 +14,7 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 #include <string.h>
 #include <stdint.h>
 #include "fftconv.h"
+#include "msconv.h"
 
 /* help page */
 /* vim hint to remove resp. add quotes:
@@ -26,18 +27,20 @@ void usage( ) {
           VERSION);
   fprintf(stderr,
 "\n"
-"  msfir [options] sfilter lfilter rfilter\n"
+"  msfir [options]\n"
 "\n"
 "  This command works as a filter for stereo audio streams in raw\n"
 "  64-bit floating point format (FLOAT64_LE), it reads from stdin and\n"
 "  writes to stdout.\n"
 "\n"
-"  With input channels L and R it computes\n"
+"  With input channels L and R and option --Sfilter it computes\n"
 "      M = 0.4 (L + R),   S = 0.8 (L - R),\n"
-"      S' = S convolved with the coefficients in 'sfilter',\n"
-"      L' = M + S',  R' = M - S',\n"
-"  and outputs L' convolved with 'lfilter' as left channel and R'\n"
-"  convolved with 'rfilter' as right channel.\n"
+"      S' = S convolved with the S filter,\n"
+"      L' = M + S',  R' = M - S'.\n"
+"  Without --Sfilter we just have L' = L and R' = R.\n"
+"  With option --LRfilters the output is L' convolved with the L filter\n"
+"  as left channel and R' convolved with the R filter as right channel,\n"
+"  otherwise the output is L', R'.\n"
 "\n"
 "  The filter files contain raw 64-bit floating point coefficients\n"
 "  (FLOAT64_LE), their lengths can be arbitrary.\n"
@@ -50,16 +53,25 @@ void usage( ) {
 "\n"
 "  OPTIONS\n"
 "\n"
+"  --Sfilter=sfilt, -S sfilt\n"
+"      file with the filter for the S channel, as described above.\n"
+"\n"
+"  --LRfilters=lfilt,rfilt, -L lfilt,rfilt\n"
+"      files with the filters for the left and right channel, as\n"
+"      described above (the file names must not contain commas).\n"
+"\n"
 "  --block-length=intval, -b intval\n"
 "      the length of the blocks (filter partitions) used for the\n"
 "      convolution. Larger values need less CPU, the FFT length is\n"
 "      twice this value. Default is 16384.\n"
 "\n"
 "  --m-factor=floatval, -m floatval\n"
-"      the factor in the definition of M. Default is 0.4.\n"
+"      the factor in the definition of M (only used with --Sfilter).\n"
+"      Default is 0.4.\n"
 "\n"
 "  --s-factor=floatval, -s floatval\n"
-"      the factor in the definition of S. Default is 0.8.\n"
+"      the factor in the definition of S (only used with --Sfilter).\n"
+"      Default is 0.8.\n"
 "\n"
 "  --wisdom-file=fname, -w fname\n"
 "      file to store FFTW wisdom (optimized plans for the FFTs). It is\n"
@@ -67,12 +79,17 @@ void usage( ) {
 "      avoids the planning time (almost a second with the default block\n"
 "      length) in later runs. Default is no wisdom file.\n"
 "\n"
+"  --toint32, -I\n"
+"      output 32-bit signed integer samples (S32_LE) instead of 64-bit\n"
+"      floating point samples. Samples outside [-1,1] are clipped.\n"
+"\n"
 "  --by4int32, -4\n"
 "      output only every fourth frame (frames 0, 4, 8, ...) with samples\n"
 "      as 32-bit signed integers (S32_LE), e.g., 48000 Hz output from\n"
 "      192000 Hz input. This trivial downsampling is only valid if the\n"
-"      filters remove all content above a quarter of the input sample\n"
-"      rate. Samples outside [-1,1] are clipped.\n"
+"      filters remove all content above half of the output sample\n"
+"      rate (= 1/8th of the input sample rate).\n"
+"      Samples outside [-1,1] are clipped.\n"
 "\n"
 "  --tail, -t\n"
 "      at end of input continue with silence until the complete\n"
@@ -89,9 +106,10 @@ void usage( ) {
 "\n"
 "  EXAMPLE\n"
 "\n"
-"  Replacement for 'brutefir fromcache64.conf -quiet' with a brutefir\n"
+"  Replacement for 'brutefir SLRfilter.conf -quiet' with a brutefir\n"
 "  configuration implementing the computation described above:\n"
-"      msfir -w ~/.msfir_wisdom FHR-192.dbl LeftFiltSt.pcm RightFiltSt.pcm\n"
+"      msfir -w ~/.msfir_wisdom --Sfilter=Sfilt.dbl \\\n"
+"            --LRfilters=Leftfilt.dbl,Rightfilt.dbl\n"
 "\n"
 );
 }
@@ -110,35 +128,14 @@ static void writeframes(double *buf, long n)
   }
 }
 
-/* write every fourth frame as 32-bit integers, pos is the number of
-   frames written before (to keep the frame selection across blocks) */
-static void writeby4int32(double *buf, long n, long pos, int32_t *obuf)
-{
-  long i, k;
-  double v;
-
-  for (i = (4 - pos % 4) % 4, k = 0; i < n; i += 4) {
-    v = buf[2*i];
-    obuf[k++] = v >= 1.0 ? INT32_MAX : v <= -1.0 ? -INT32_MAX :
-                (int32_t)(v * 2147483647);
-    v = buf[2*i+1];
-    obuf[k++] = v >= 1.0 ? INT32_MAX : v <= -1.0 ? -INT32_MAX :
-                (int32_t)(v * 2147483647);
-  }
-  if (fwrite(obuf, sizeof(int32_t), k, stdout) != (size_t)k) {
-    fprintf(stderr, "msfir: write error.\n");
-    exit(4);
-  }
-}
-
 int main(int argc, char *argv[])
 {
-  int optc, optidx, blen, verbose, tail, by4, i;
-  long hslen, hllen, hrlen, nin, nout, rest, total, written;
-  char *wisdom;
-  double mfac, sfac, *hs, *hl, *hr, *buf, *m, *s, *l, *r;
+  int optc, optidx, blen, verbose, tail, by4, out32;
+  long nin, nout, rest, total, written, k;
+  char *wisdom, *sfilt, *lfilt, *rfilt;
+  double mfac, sfac, *buf;
   int32_t *obuf;
-  fftconv *cs, *cl, *cr;
+  msconv *ms;
 
   if (argc == 1) {
     usage();
@@ -150,24 +147,43 @@ int main(int argc, char *argv[])
   sfac = 0.8;
   tail = 0;
   by4 = 0;
+  out32 = 0;
   verbose = 0;
   wisdom = NULL;
+  sfilt = NULL;
+  lfilt = NULL;
+  rfilt = NULL;
   /* read command line options */
   static struct option longoptions[] = {
+    {"Sfilter", required_argument, 0, 'S' },
+    {"LRfilters", required_argument, 0, 'L' },
     {"block-length", required_argument, 0, 'b' },
     {"m-factor", required_argument, 0, 'm' },
     {"s-factor", required_argument, 0, 's' },
     {"wisdom-file", required_argument, 0, 'w' },
     {"by4int32", no_argument, 0, '4' },
+    {"toint32", no_argument, 0, 'I' },
     {"tail", no_argument, 0, 't' },
     {"verbose", no_argument, 0, 'p' },
     {"version", no_argument, 0, 'V' },
     {"help", no_argument, 0, 'h' },
     {0,         0,                 0,  0 }
   };
-  while ((optc = getopt_long(argc, argv, "b:m:s:w:4tpVh",
+  while ((optc = getopt_long(argc, argv, "S:L:b:m:s:w:4ItpVh",
           longoptions, &optidx)) != -1) {
     switch (optc) {
+    case 'S':
+      sfilt = optarg;
+      break;
+    case 'L':
+      lfilt = strdup(optarg);
+      rfilt = strchr(lfilt, ',');
+      if (!rfilt || rfilt[1] == '\0' || rfilt == lfilt) {
+        fprintf(stderr, "msfir: need two file names in --LRfilters.\n");
+        exit(1);
+      }
+      *rfilt++ = '\0';
+      break;
     case 'b':
       blen = atoi(optarg);
       break;
@@ -182,6 +198,9 @@ int main(int argc, char *argv[])
       break;
     case '4':
       by4 = 1;
+      break;
+    case 'I':
+      out32 = 1;
       break;
     case 't':
       tail = 1;
@@ -198,8 +217,9 @@ int main(int argc, char *argv[])
       exit(1);
     }
   }
-  if (argc - optind != 3) {
-    fprintf(stderr, "msfir: need three filter files as arguments.\n");
+  if (optind < argc) {
+    fprintf(stderr, "msfir: unexpected argument %s (filters must be given "
+            "with --Sfilter and --LRfilters).\n", argv[optind]);
     exit(1);
   }
   if (blen < 16) {
@@ -207,35 +227,15 @@ int main(int argc, char *argv[])
     exit(1);
   }
 
-  hs = fftconv_readcoeffs(argv[optind], &hslen);
-  hl = fftconv_readcoeffs(argv[optind+1], &hllen);
-  hr = fftconv_readcoeffs(argv[optind+2], &hrlen);
   if (wisdom && !fftconv_loadwisdom(wisdom) && verbose)
     fprintf(stderr, "msfir: no wisdom read from %s\n", wisdom);
-  cs = fftconv_new(hs, hslen, blen);
-  cl = fftconv_new(hl, hllen, blen);
-  cr = fftconv_new(hr, hrlen, blen);
+  ms = msconv_new(sfilt, lfilt, rfilt, blen, mfac, sfac, verbose);
   if (wisdom)
     fftconv_savewisdom(wisdom);
-  free(hs); free(hl); free(hr);
-  if (verbose) {
-    fprintf(stderr, "msfir: block length %d, M factor %g, S factor %g\n",
-            blen, mfac, sfac);
-    fprintf(stderr, "msfir: S filter %ld taps (%d partitions)\n",
-            hslen, fftconv_partitions(cs));
-    fprintf(stderr, "msfir: L filter %ld taps (%d partitions)\n",
-            hllen, fftconv_partitions(cl));
-    fprintf(stderr, "msfir: R filter %ld taps (%d partitions)\n",
-            hrlen, fftconv_partitions(cr));
-  }
 
   buf = malloc(2 * blen * sizeof(double));
-  m = malloc(blen * sizeof(double));
-  s = malloc(blen * sizeof(double));
-  l = malloc(blen * sizeof(double));
-  r = malloc(blen * sizeof(double));
-  obuf = malloc(2 * (blen / 4 + 1) * sizeof(int32_t));
-  if (!buf || !m || !s || !l || !r || !obuf) {
+  obuf = malloc(2 * blen * sizeof(int32_t));
+  if (!buf || !obuf) {
     fprintf(stderr, "msfir: out of memory.\n");
     exit(3);
   }
@@ -253,26 +253,12 @@ int main(int argc, char *argv[])
         memset(buf + 2 * nin, 0, 2 * (blen - nin) * sizeof(double));
         rest = nin;
         if (tail)
-          rest += (hslen - 1) + (hllen > hrlen ? hllen : hrlen) - 1;
+          rest += msconv_taillength(ms);
       }
     } else
       memset(buf, 0, 2 * blen * sizeof(double));
 
-    for (i = 0; i < blen; i++) {
-      m[i] = mfac * (buf[2*i] + buf[2*i+1]);
-      s[i] = sfac * (buf[2*i] - buf[2*i+1]);
-    }
-    fftconv_process(cs, s, s);
-    for (i = 0; i < blen; i++) {
-      l[i] = m[i] + s[i];
-      r[i] = m[i] - s[i];
-    }
-    fftconv_process(cl, l, l);
-    fftconv_process(cr, r, r);
-    for (i = 0; i < blen; i++) {
-      buf[2*i] = l[i];
-      buf[2*i+1] = r[i];
-    }
+    msconv_process(ms, buf);
 
     nout = blen;
     if (rest >= 0) {
@@ -280,9 +266,19 @@ int main(int argc, char *argv[])
         nout = rest;
       rest -= nout;
     }
-    if (by4)
-      writeby4int32(buf, nout, written, obuf);
-    else
+    if (by4) {
+      k = msconv_by4int32(buf, nout, written, obuf);
+      if (fwrite(obuf, 2 * sizeof(int32_t), k, stdout) != (size_t)k) {
+        fprintf(stderr, "msfir: write error.\n");
+        exit(4);
+      }
+    } else if (out32) {
+      msconv_toint32(buf, nout, obuf);
+      if (fwrite(obuf, 2 * sizeof(int32_t), nout, stdout) != (size_t)nout) {
+        fprintf(stderr, "msfir: write error.\n");
+        exit(4);
+      }
+    } else
       writeframes(buf, nout);
     written += nout;
   }
@@ -290,9 +286,7 @@ int main(int argc, char *argv[])
   if (verbose)
     fprintf(stderr, "msfir: %ld input frames\n", total);
 
-  fftconv_free(cs);
-  fftconv_free(cl);
-  fftconv_free(cr);
-  free(buf); free(m); free(s); free(l); free(r); free(obuf);
+  msconv_free(ms);
+  free(buf); free(obuf);
   return 0;
 }

@@ -82,10 +82,18 @@ resampler: bin/resample_soxr
 tmp/fftconv.o: src/fftconv.h src/fftconv.c |tmp
 	$(CC) $(CFLAGS) -O3 -c -o tmp/fftconv.o src/fftconv.c
 
-bin/msfir: src/version.h src/msfir.c tmp/fftconv.o |bin
-	$(CC) $(CFLAGS) -o bin/msfir src/msfir.c tmp/fftconv.o -lfftw3 -lm
+tmp/msconv.o: src/msconv.h src/fftconv.h src/msconv.c |tmp
+	$(CC) $(CFLAGS) -c -o tmp/msconv.o src/msconv.c
+
+bin/msfir: src/version.h src/msfir.c src/msconv.h tmp/msconv.o tmp/fftconv.o |bin
+	$(CC) $(CFLAGS) -o bin/msfir src/msfir.c tmp/msconv.o tmp/fftconv.o -lfftw3 -lm
 
 msfir: bin/msfir
+
+bin/resample_soxr_convolve: src/version.h src/nf_io.h src/resample_soxr_convolve.c src/msconv.h tmp/msconv.o tmp/fftconv.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve src/resample_soxr_convolve.c tmp/msconv.o tmp/fftconv.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lpthread -lm -lrt
+
+resample_soxr_convolve: bin/resample_soxr_convolve
 
 bin/cat64: src/version.h src/cat64.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/cat64 src/cat64.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt

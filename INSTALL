@@ -16,6 +16,10 @@ or you may have to install libsoxr by hand, see
      https://sourceforge.net/projects/soxr/
 )
 
+The programs 'msfir' and 'resample_soxr_convolve' need additionally the
+'fftw3' library (on Debian/Ubuntu: sudo apt-get install libfftw3-dev), they
+are not built by default, use 'make msfir' and 'make resample_soxr_convolve'.
+
 For 'cat64' the 'sndfile' library is needed.
 (On Debian/Ubuntu, etc, use
      sudo apt-get install libsndfile-dev

@@ -95,6 +95,23 @@ bin/resample_soxr_convolve: src/version.h src/nf_io.h src/resample_soxr_convolve
 
 resample_soxr_convolve: bin/resample_soxr_convolve
 
+# player thread as in myplayhrt_c4, compiled without optimization like it
+tmp/c4play.o: src/c4play.h src/c4play.c src/cprefresh.h |tmp
+	$(CC) $(CFLAGSNO) -c -o tmp/c4play.o src/c4play.c
+
+bin/resample_soxr_convolve_play: src/version.h src/nf_io.h src/resample_soxr_convolve_play.c src/msconv.h src/c4play.h tmp/msconv.o tmp/fftconv.o tmp/c4play.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_play src/resample_soxr_convolve_play.c tmp/msconv.o tmp/fftconv.o tmp/c4play.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lasound -lpthread -lm -lrt
+
+resample_soxr_convolve_play: bin/resample_soxr_convolve_play
+
+tmp/usbplay.o: src/usbplay.h src/usbplay.c src/cprefresh.h |tmp
+	$(CC) $(CFLAGSNO) -c -o tmp/usbplay.o src/usbplay.c
+
+bin/resample_soxr_convolve_USB: src/version.h src/nf_io.h src/resample_soxr_convolve_USB.c src/msconv.h src/usbplay.h tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_USB src/resample_soxr_convolve_USB.c tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lusb-1.0 -lpthread -lm -lrt
+
+resample_soxr_convolve_USB: bin/resample_soxr_convolve_USB
+
 bin/cat64: src/version.h src/cat64.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/cat64 src/cat64.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
 
@@ -134,13 +151,19 @@ bin/bufhrt_c4: src/version.h tmp/net.o src/bufhrt_c4.c tmp/cprefresh.o tmp/cpref
 bin/forimprove_c4: src/version.h tmp/net.o src/forimprove_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/forimprove_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/forimprove_c4.c -lpthread -lrt -lm
 
+bin/improvetest: src/version.h src/improvetest.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGSNO) -o bin/improvetest tmp/cprefresh.o tmp/cprefresh_ass.o src/improvetest.c -lrt -lm
+
+bin/readlat: src/readlat.c |bin
+	$(CC) $(CFLAGS) -o bin/readlat src/readlat.c
+
 bin/forimprovedirect_c4: src/version.h tmp/net.o src/forimprovedirect_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/forimprovedirect_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/forimprovedirect_c4.c -lpthread -lrt -lm
 
 bin/music2nf_c4: src/version.h src/nf_io.h src/music2nf_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/music2nf_c4 src/music2nf_c4.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
 
-c4: bin/by4 bin/myplayhrt_c4 bin/bufhrt_c4 bin/forimprove_c4 bin/forimprovedirect_c4 bin/music2nf_c4
+c4: bin/by4 bin/myplayhrt_c4 bin/bufhrt_c4 bin/forimprove_c4 bin/forimprovedirect_c4 bin/music2nf_c4 bin/improvetest bin/readlat
 
 clean: 
 	rm -rf src/version.h bin tmp

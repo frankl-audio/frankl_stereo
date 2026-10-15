@@ -33,6 +33,7 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 #include <semaphore.h>
 #include <linux/prctl.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #include "cprefresh.h"
 //#include "counttotick_aa64.h"
 
@@ -233,6 +234,15 @@ void usage( ) {
 "      it is normal that the first block and one or two blocks at the end\n"
 "      return fewer data).\n"
 "\n"
+"  --shift=intval, -H intval\n"
+"      wake up from sleep this many nanoseconds before the commit, the\n"
+"      remaining time is spent in an active loop on the system counter.\n"
+"      Default is 95000.\n"
+"\n"
+"  --warm-up, -w\n"
+"      make a cheap system call directly after waking up from sleep,\n"
+"      this makes the system call in the commit faster and more regular.\n"
+"\n"
 "  --verbose, -v\n"
 "      print some information during startup and operation.\n"
 "      This option can be given twice for more output about timing\n"
@@ -376,7 +386,7 @@ void sleepfor(long t)
 int main(int argc, char *argv[])
 {
     int sfd, verbose, nrchannels, startcount,
-        stripped, innetbufsize, nrcp, slowcp, k;
+        stripped, innetbufsize, nrcp, slowcp, k, warmup;
     long blen, ilen, olen, extra, loopspersec, nrdelays, sleep, shift,
          count, badloops, badreads, readmissing;
     //long  avgav, checkav;
@@ -436,6 +446,8 @@ int main(int argc, char *argv[])
         {"shared", no_argument, 0, 'F' },
         {"stripped", no_argument, 0, 'X' },
         {"overwrite", required_argument, 0, 'O' },
+        {"shift", required_argument, 0, 'H' },
+        {"warm-up", no_argument, 0, 'w' },
         {"verbose", no_argument, 0, 'v' },
         {"no-buf-stats", no_argument, 0, 'y' },
         {"no-delay-stats", no_argument, 0, 'j' },
@@ -479,11 +491,12 @@ int main(int argc, char *argv[])
     stripped = 0;
     sstat = NULL;
     shift = 95000;
+    warmup = 0;
     sstat = NULL;
     /* use to enable statistics to find good shift parameter 
     sstatcount = 0;
     sstat = malloc(SSTATLEN*sizeof(long)); */
-    while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:R:Ce:m:K:o:NFXO:vyjVh",
+    while ((optc = getopt_long(argc, argv, "r:p:Sb:D:i:n:s:f:k:Mc:P:d:R:Ce:m:K:o:NFXO:H:wvyjVh",
             longoptions, &optind)) != -1) {
         switch (optc) {
         case 'r':
@@ -572,6 +585,12 @@ int main(int argc, char *argv[])
         case 'j':
           break;
         case 'y':
+          break;
+        case 'H':
+          shift = atol(optarg);
+          break;
+        case 'w':
+          warmup = 1;
           break;
         case 'v':
           verbose += 1;
@@ -856,7 +875,8 @@ int main(int argc, char *argv[])
       /* set start time (- nsec) */
       mtime = gettime();
       __asm__ __volatile__("isb\nmrs %0, cntvct_el0" : "=r"(mtick));
-      mtick = mtick + shift/41;
+      /* 24 ticks per microsecond */
+      mtick = mtick + (long)(round(shift*0.024));
       tcount = 0;
       while (1) {
           /* prepare shared memory file */
@@ -928,6 +948,9 @@ int main(int argc, char *argv[])
              }
              tcount++;
              sleepto(mtime, tcount*nsec);
+             /* a first system call after sleep is slower, take it now */
+             if (warmup)
+                 syscall(SYS_getppid);
              /* the end of sleep is not too precise, we add an active loop
                 to delay the commit to mtime + shift ns */
              // clock_gettime(CLOCK_MONOTONIC, &ttime);

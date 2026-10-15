@@ -500,6 +500,8 @@ int main(int argc, char *argv[])
   void *tibufs[512];
   struct timespec mtime;
   struct timespec currtime;
+  int ateof;
+  long req;
   long cnt;
   /* variables for optional convolution in second thread */
   char *sfilt, *lfilt, *rfilt, *wisdom, *cpus;
@@ -951,6 +953,7 @@ int main(int argc, char *argv[])
   }
   /* we read from stdin or file/shared mem/nf file until eof or total (if >0) and write to stdout */
   cnt = 0;
+  ateof = 0;
   while (1) {
     cnt++;
     mlen = blen;
@@ -982,8 +985,12 @@ int main(int argc, char *argv[])
           }
         }
       }
-      clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
+      /* no sleep when we know that the input is exhausted, otherwise the
+         last (partial) convolver block would be delayed by one period */
+      if (!ateof && mlen != 0)
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
     }
+    req = mlen;
     if (sndfile) {
         mlen = sf_readf_double(sndfile, inp, mlen);
     }
@@ -1008,6 +1015,11 @@ int main(int argc, char *argv[])
     }       
     else
         mlen = fread((void*)inp, nch*sizeof(double), mlen, stdin);
+    /* is the input exhausted? */
+    if (mlen < req || (total != 0 && intotal + mlen >= total) ||
+        (sndfile && sfinfo.seekable && sfinfo.frames > 0 &&
+         sf_seek(sndfile, 0, SEEK_CUR) >= sfinfo.frames))
+      ateof = 1;
     if (mlen == 0) { 
       /* done */
       free(inp);

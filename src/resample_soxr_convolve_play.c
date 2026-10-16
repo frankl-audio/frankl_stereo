@@ -5,7 +5,7 @@ This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
 http://www.gnu.org/licenses/gpl.txt for license details.
 For compilation see the Makefile (needs also msconv.c, fftconv.c,
-c4play.c, cprefresh.c and the libraries soxr, sndfile, fftw3, asound,
+alsaplay.c, cprefresh.c and the libraries soxr, sndfile, fftw3, asound,
 pthread).
 */
 #define _GNU_SOURCE
@@ -29,7 +29,7 @@ pthread).
 #include "nf_io.h"
 #include "fftconv.h"
 #include "msconv.h"
-#include "c4play.h"
+#include "alsaplay.h"
 
 /* help page */
 /* vim hint to remove resp. add quotes:
@@ -72,7 +72,7 @@ void usage( ) {
 "\n"
 "  With option '--device' the output of the convolver is not written to\n"
 "  stdout but played on that sound device by a third thread, which works\n"
-"  as 'myplayhrt_c4' (only on the Odroid C4); see the options below.\n"
+"  as 'myplayhrt_c4'; see the options below.\n"
 "\n"
 "  The computation is similar to using 'sox' with effect 'rate -v -I'.\n"
 "  But 'sox' applies all effects internally to 32-bit signed integer\n"
@@ -272,7 +272,8 @@ void usage( ) {
 "\n"
 "  --shift=intval\n"
 "      nanoseconds between the end of the sleep and the commit (spent in\n"
-"      an active loop on the system counter). Default is 95000.\n"
+"      an active loop, on the Odroid C4 on the system counter if compiled\n"
+"      with -DC4TIMER). Default is 95000.\n"
 "\n"
 "  --warm-up\n"
 "      make a cheap system call directly after the sleep.\n"
@@ -432,7 +433,7 @@ struct convthread {
   long nrcp;
   void *tbufs[512];
   int32_t *iout;
-  c4play *play;            /* if not NULL: play instead of stdout */
+  alsaplay *play;            /* if not NULL: play instead of stdout */
 };
 
 static void setcpu(int cpu)
@@ -516,7 +517,7 @@ static void *convloop(void *arg)
       refreshmem(data, rlen);
     }
     if (ct->play) {
-      c4play_write(ct->play, data, rlen);
+      alsaplay_write(ct->play, data, rlen);
     } else {
       if (fwrite(data, 1, rlen, stdout) != (size_t)rlen) {
         fprintf(stderr, "resample_soxr_convolve_play: Error in write.\n");
@@ -1070,11 +1071,11 @@ int main(int argc, char *argv[])
               exit(1);
           }
           /* ring for two blocks of convolver output */
-          ct->play = c4play_new(device, (int)prate, loopspersec, hwbufsize,
+          ct->play = alsaplay_new(device, (int)prate, loopspersec, hwbufsize,
                          extrabps, nonblock, shift, warmup, pnrcp,
                          2 * 2 * sizeof(int32_t) * (by4 ? cblen/4+1 : cblen),
                          cpus ? pcpu : -1, pprio, verbose);
-          c4play_start(ct->play);
+          alsaplay_start(ct->play);
       }
       ct->mincount = NCBLOCKS;
       pthread_mutex_init(&ct->mutex, NULL);
@@ -1295,7 +1296,7 @@ int main(int argc, char *argv[])
         clock_gettime(CLOCK_MONOTONIC, &currtime);
         if (currtime.tv_sec >= lastfill + 10) {
             lastfill = currtime.tv_sec;
-            c4play_fill(ct->play, &fms, &fminms, &fwaits);
+            alsaplay_fill(ct->play, &fms, &fminms, &fwaits);
             pthread_mutex_lock(&ct->mutex);
             cnow = ct->count;
             cmin = ct->mincount;
@@ -1365,7 +1366,7 @@ int main(int argc, char *argv[])
       ct_putblock(ct, cfill);
       pthread_join(cthread, NULL);
       if (ct->play)
-          c4play_finish(ct->play);
+          alsaplay_finish(ct->play);
   }
   soxr_delete(soxr);
   free(out);

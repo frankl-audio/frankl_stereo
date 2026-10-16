@@ -10,11 +10,11 @@ device with asynchronous feedback (e.g., a DDC), without ALSA and
 snd-usb-audio. It uses libusb; the kernel driver is detached from the
 audio interfaces while playing and reattached afterwards.
 
-As in c4play the player is fed from a lock free ring buffer (single
+As in alsaplay the player is fed from a lock free ring buffer (single
 producer, single consumer). The player thread fills isochronous transfers
-from the ring and submits them at precise times (sleep and active loop on
-the 24 MHz system counter as in myplayhrt_c4), all USB event handling is
-done in this thread as well.
+from the ring and submits them at precise times (sleep and active wait
+as in alsaplay; with -DC4TIMER on the 24 MHz system counter of the Odroid
+C4), all USB event handling is done in this thread as well.
 
 Sample format is S32_LE with 2 channels (32-bit alternate setting).
 */

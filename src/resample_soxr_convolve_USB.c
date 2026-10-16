@@ -36,6 +36,7 @@ pthread).
       s/^"\(.*\)\\n"$/\1/
       s/.*$/"\0\\n"/
 */
+/* print the help page */
 void usage( ) {
   fprintf(stderr,
           "resample_soxr_convolve_USB (version %s of frankl's stereo utilities)\n\nUSAGE:\n",
@@ -74,7 +75,7 @@ void usage( ) {
 "  to stdout but sent directly to a USB audio device (USB Audio Class 2\n"
 "  with asynchronous feedback, e.g. a DDC) by a third thread, without\n"
 "  ALSA and the kernel driver snd-usb-audio. The timing works as in\n"
-"  'myplayhrt_c4' (only on the Odroid C4); see the options below.\n"
+"  'myplayhrt_c4'; see the options below.\n"
 "\n"
 "  The computation is similar to using 'sox' with effect 'rate -v -I'.\n"
 "  But 'sox' applies all effects internally to 32-bit signed integer\n"
@@ -286,7 +287,8 @@ void usage( ) {
 "\n"
 "  --shift=intval\n"
 "      nanoseconds between the end of the sleep and the submit (spent in\n"
-"      an active loop on the system counter). Default is 95000.\n"
+"      an active loop, on the Odroid C4 on the system counter if compiled\n"
+"      with -DC4TIMER). Default is 95000.\n"
 "\n"
 "  --warm-up\n"
 "      make a cheap system call directly after the sleep.\n"
@@ -451,6 +453,7 @@ struct convthread {
   usbplay *play;            /* if not NULL: play instead of stdout */
 };
 
+/* pin the calling thread to CPU cpu, exits on error */
 static void setcpu(int cpu)
 {
   cpu_set_t set;
@@ -486,6 +489,10 @@ static void ct_putblock(struct convthread *ct, long len)
   pthread_mutex_unlock(&ct->mutex);
 }
 
+/* convolver thread: take the next block from the ring, convolve it,
+   optionally convert to 32-bit integers (every fourth frame with
+   --by4int32), and hand the result to the player or write it to stdout;
+   ends after the last (partial) block */
 static void *convloop(void *arg)
 {
   struct convthread *ct = arg;
@@ -551,6 +558,9 @@ static void *convloop(void *arg)
   return NULL;
 }
 
+/* parse options, open input, set up resampler, optional convolver and
+   player threads, then read, resample and hand over the input block by
+   block (paced by --realtime) */
 int main(int argc, char *argv[])
 {
   /* variables for the resampler */

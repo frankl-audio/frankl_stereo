@@ -6,8 +6,9 @@ See the file License.txt of the distribution and
 http://www.gnu.org/licenses/gpl.txt for license details.
 
 Player thread for USB Audio Class 2 devices with libusb, see usbplay.h.
-The timing code is the same as in c4play.c (from myplayhrt_c4), and like
-these this is compiled without optimization.
+The timing code is the same as in alsaplay.c (sleep, then active wait;
+with -DC4TIMER on the 24 MHz system counter of the Odroid C4), and like
+alsaplay.c this is compiled without optimization.
 
 Timing: the USB bus takes one packet per (micro)frame, so a transfer of
 ppt packets is played in exactly ppt/pktps seconds of the bus clock; the
@@ -117,6 +118,7 @@ static void sleepto(long base, double dns)
   clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &time, NULL);
 }
 
+/* sleep for t ns (relative) */
 static void sleepns(long t)
 {
   struct timespec time;
@@ -125,7 +127,17 @@ static void sleepns(long t)
   nanosleep(&time, NULL);
 }
 
+#ifdef C4TIMER
 #ifdef __aarch64__
+/* timing on the Odroid C4: ticks of the 24 MHz system counter, the
+   active wait after the sleep is a loop on this counter */
+#define TICKSPERNS 0.024
+
+static void timer_init()
+{
+}
+
+/* read the 24 MHz system counter */
 static inline long getticks()
 {
   long t;
@@ -170,19 +182,45 @@ static inline void spinto(long etick)
   : "x7", "x8" );
 }
 #else
-/* only for testing the program logic on other machines: a 24 MHz
-   counter derived from CLOCK_MONOTONIC_RAW */
-static inline long getticks()
+#error "C4TIMER needs an aarch64 system counter (Odroid C4)"
+#endif
+#else
+/* generic timing: ticks are nanoseconds of CLOCK_MONOTONIC, the active
+   wait after the sleep is a calibrated loop */
+#define TICKSPERNS 1.0
+
+/* after calibration nsloop takes about cnt ns */
+static double nsloopfactor = 1.0;
+
+static long nsloop(long cnt)
 {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC_RAW, &t);
-  return (t.tv_sec*1000000000+t.tv_nsec)*3/125;
+  long i, j;
+  for (j = 1, i = (long)(cnt*nsloopfactor); i > 0; i--) j = j+i;
+  return j;
 }
 
+/* calibrate nsloop, call it on the CPU where the loop is used */
+static void timer_init()
+{
+  long t0, t1;
+  nsloop(1000000);
+  t0 = gettime();
+  nsloop(10000000);
+  t1 = gettime();
+  nsloopfactor = 1.0*10000000/(t1-t0-50);
+}
+
+static inline long getticks()
+{
+  return gettime();
+}
+
+/* active loop until CLOCK_MONOTONIC reaches etick ns */
 static inline void spinto(long etick)
 {
-  while (getticks() < etick)
-    ;
+  long t = gettime();
+  if (etick > t)
+    nsloop(etick - t);
 }
 #endif
 
@@ -202,6 +240,7 @@ static void fromring(usbplay *p, char *dest, long pos, long n)
 
 /* USB callbacks, they are called within libusb_handle_events* in the
    player thread */
+/* data transfer completed: count errors and mark its slot as free */
 static void datacb(struct libusb_transfer *t)
 {
   struct slot *s = t->user_data;
@@ -250,6 +289,8 @@ static void newfeedback(usbplay *p, unsigned long v)
   }
 }
 
+/* feedback transfer completed: take the new value and resubmit the
+   transfer (unless we are stopping) */
 static void fbcb(struct libusb_transfer *t)
 {
   usbplay *p = t->user_data;
@@ -267,6 +308,8 @@ static void fbcb(struct libusb_transfer *t)
   p->fbactive--;
 }
 
+/* handle pending USB events (completions, callbacks), wait at most usec
+   microseconds; exits if the device has gone */
 static void handle(usbplay *p, long usec)
 {
   struct timeval tv;
@@ -280,7 +323,8 @@ static void handle(usbplay *p, long usec)
   }
 }
 
-/* for statistics: v is new maximum/minimum */
+/* for statistics: update maximum (setmax) or minimum (setmin), only the
+   player thread writes, usbplay_stats resets */
 static void setmax(atomic_long *a, long v)
 {
   if (v > atomic_load_explicit(a, memory_order_relaxed))
@@ -293,6 +337,7 @@ static void setmin(atomic_long *a, long v)
     atomic_store_explicit(a, v, memory_order_relaxed);
 }
 
+/* submit transfer number t (in slot t % nt), exits on error */
 static void submit(usbplay *p, long t)
 {
   int r, s = t % p->nt;
@@ -388,6 +433,10 @@ static void resync(usbplay *p, long t)
   atomic_fetch_add(&p->resyncs, 1);
 }
 
+/* the player thread: prefill and submit all transfers, then in each loop
+   refill the next free transfer from the ring and submit it at the
+   precise time; at the end wait until all is played and stop the
+   feedback transfers */
 static void *playloop(void *arg)
 {
   usbplay *p = arg;
@@ -409,6 +458,7 @@ static void *playloop(void *arg)
   }
   /* avoid waiting 50000 ns collecting more sleep requests */
   prctl(PR_SET_TIMERSLACK, 1L);
+  timer_init();
 
   /* wait until the ring is full or the input complete */
   while (!atomic_load_explicit(&p->full, memory_order_acquire) &&
@@ -644,6 +694,9 @@ static int acrequest(usbplay *p, int in, int cs, int id, unsigned char *b,
            0x01 /* CUR */, cs << 8, (id << 8) | p->acif, b, len, 1000);
 }
 
+/* the following functions are described in usbplay.h */
+
+/* open and configure the device, allocate transfers and ring */
 usbplay *usbplay_new(const char *device, int rate, long loopspersec,
                      int ntransfers, long shift, int warmup, int nrcp,
                      int zerocopy, long ringsize, int cpu, int prio,
@@ -708,7 +761,7 @@ usbplay *usbplay_new(const char *device, int rate, long loopspersec,
   }
   atomic_init(&p->fbrate, (long)rate*1000);
   p->nsec = 1000000000.0/loopspersec;
-  p->ntick = p->nsec*3/125;
+  p->ntick = p->nsec*TICKSPERNS;
 
   /* detach snd-usb-audio, it is reattached when we release the
      interfaces */
@@ -810,6 +863,7 @@ usbplay *usbplay_new(const char *device, int rate, long loopspersec,
   return p;
 }
 
+/* start the player thread */
 void usbplay_start(usbplay *p)
 {
   if (pthread_create(&p->thread, NULL, playloop, p) != 0) {
@@ -818,6 +872,7 @@ void usbplay_start(usbplay *p)
   }
 }
 
+/* producer: copy data into the ring, sleep while it is full */
 void usbplay_write(usbplay *p, const char *data, long len)
 {
   long n, free, wp, off, k, fill, mf;
@@ -853,6 +908,7 @@ void usbplay_write(usbplay *p, const char *data, long len)
   }
 }
 
+/* statistics for the verbose output of the main program */
 void usbplay_fill(usbplay *p, double *ms, double *minms, long *waits,
                   long *resyncs, double *fbrate)
 {
@@ -868,6 +924,8 @@ void usbplay_fill(usbplay *p, double *ms, double *minms, long *waits,
   *fbrate = atomic_load_explicit(&p->fbrate, memory_order_relaxed) / 1000.0;
 }
 
+/* mark end of input, wait for the player thread, release the device
+   (snd-usb-audio is reattached) and free all resources */
 void usbplay_finish(usbplay *p)
 {
   int i;
@@ -898,15 +956,17 @@ void usbplay_finish(usbplay *p)
             (long)atomic_load(&p->resyncs), p->xerrs, p->pkterrs);
 }
 
+/* format the diagnostics since the last call and reset them */
 void usbplay_stats(usbplay *p, char *buf, int len)
 {
-  /* ticks of 24 MHz counter to microseconds */
+  /* ticks to microseconds */
   snprintf(buf, len, "in flight %ld..%ld (expected %d), max wake late %.1f us, "
            "max submit %.1f us, max event handling %.1f us, "
            "errors %ld transfers %ld packets",
            atomic_exchange(&p->inmin, 1000), atomic_exchange(&p->inmax, -1),
-           (p->nt+1)/2, atomic_exchange(&p->latemax, -1000000000)/24.0,
-           atomic_exchange(&p->submax, 0)/24.0,
-           atomic_exchange(&p->handlemax, 0)/24.0,
+           (p->nt+1)/2,
+           atomic_exchange(&p->latemax, -1000000000)/(TICKSPERNS*1000.0),
+           atomic_exchange(&p->submax, 0)/(TICKSPERNS*1000.0),
+           atomic_exchange(&p->handlemax, 0)/(TICKSPERNS*1000.0),
            atomic_load(&p->xerrsa), atomic_load(&p->pkterrsa));
 }

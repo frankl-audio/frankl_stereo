@@ -1,13 +1,19 @@
 /*
-c4play.c                Copyright frankl 2025-2026
+alsaplay.c                Copyright frankl 2025-2026
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
 http://www.gnu.org/licenses/gpl.txt for license details.
 
 Player thread as in myplayhrt_c4 (only its code path for shared memory
-input with --mmap and --stripped), see c4play.h. Like myplayhrt_c4 this
+input with --mmap and --stripped), see alsaplay.h. Like myplayhrt_c4 this
 is compiled without optimization.
+
+Timing: the thread sleeps with clock_nanosleep until shift ns before the
+commit and then waits actively. By default this active wait is a
+calibrated loop (nsloop); with -DC4TIMER (only on aarch64, intended for
+the Odroid C4) it is a loop on the 24 MHz system counter as in
+myplayhrt_c4.
 */
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -23,11 +29,11 @@ is compiled without optimization.
 #include <sys/syscall.h>
 #include <alsa/asoundlib.h>
 #include "cprefresh.h"
-#include "c4play.h"
+#include "alsaplay.h"
 
 #define BPF 8      /* bytes per frame: 2 channels S32_LE */
 
-struct c4play {
+struct alsaplay {
   snd_pcm_t *pcm;
   long hwbufsize, olen, shift, nrcp;
   int warmup, cpu, prio, verbose;
@@ -39,7 +45,7 @@ struct c4play {
   atomic_int eof;
   atomic_int full;             /* producer had to wait for space */
   atomic_long minfill;         /* smallest fill before a write, see
-                                  c4play_fill */
+                                  alsaplay_fill */
   long bps;                    /* bytes per second */
   void *tbufs[1024];
   long underruns;
@@ -73,7 +79,17 @@ static void sleepns(long t)
   nanosleep(&time, NULL);
 }
 
+#ifdef C4TIMER
 #ifdef __aarch64__
+/* timing on the Odroid C4: ticks of the 24 MHz system counter, the
+   active wait after the sleep is a loop on this counter */
+#define TICKSPERNS 0.024
+
+static void timer_init()
+{
+}
+
+/* read the 24 MHz system counter */
 static inline long getticks()
 {
   long t;
@@ -118,24 +134,50 @@ static inline void spinto(long etick)
   : "x7", "x8" );
 }
 #else
-/* only for testing the program logic on other machines: a 24 MHz
-   counter derived from CLOCK_MONOTONIC_RAW */
-static inline long getticks()
+#error "C4TIMER needs an aarch64 system counter (Odroid C4)"
+#endif
+#else
+/* generic timing: ticks are nanoseconds of CLOCK_MONOTONIC, the active
+   wait after the sleep is a calibrated loop */
+#define TICKSPERNS 1.0
+
+/* after calibration nsloop takes about cnt ns */
+static double nsloopfactor = 1.0;
+
+static long nsloop(long cnt)
 {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC_RAW, &t);
-  return (t.tv_sec*1000000000+t.tv_nsec)*3/125;
+  long i, j;
+  for (j = 1, i = (long)(cnt*nsloopfactor); i > 0; i--) j = j+i;
+  return j;
 }
 
+/* calibrate nsloop, call it on the CPU where the loop is used */
+static void timer_init()
+{
+  long t0, t1;
+  nsloop(1000000);
+  t0 = gettime();
+  nsloop(10000000);
+  t1 = gettime();
+  nsloopfactor = 1.0*10000000/(t1-t0-50);
+}
+
+static inline long getticks()
+{
+  return gettime();
+}
+
+/* active loop until CLOCK_MONOTONIC reaches etick ns */
 static inline void spinto(long etick)
 {
-  while (getticks() < etick)
-    ;
+  long t = gettime();
+  if (etick > t)
+    nsloop(etick - t);
 }
 #endif
 
 /* copy n bytes from ring position pos to dest (with cleaning) */
-static void fromring(c4play *p, char *dest, long pos, long n)
+static void fromring(alsaplay *p, char *dest, long pos, long n)
 {
   long off = pos % p->size, k;
 
@@ -150,7 +192,7 @@ static void fromring(c4play *p, char *dest, long pos, long n)
 
 static void *playloop(void *arg)
 {
-  c4play *p = arg;
+  alsaplay *p = arg;
   snd_pcm_t *pcm = p->pcm;
   const snd_pcm_channel_area_t *areas;
   snd_pcm_uframes_t offset, frames;
@@ -163,15 +205,16 @@ static void *playloop(void *arg)
     CPU_ZERO(&set);
     CPU_SET(p->cpu, &set);
     if (pthread_setaffinity_np(pthread_self(), sizeof(set), &set) != 0)
-      fprintf(stderr, "c4play: cannot set affinity to CPU %d.\n", p->cpu);
+      fprintf(stderr, "alsaplay: cannot set affinity to CPU %d.\n", p->cpu);
   }
   if (p->prio > 0) {
     struct sched_param sp = { .sched_priority = p->prio };
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0)
-      fprintf(stderr, "c4play: cannot set SCHED_FIFO priority %d.\n", p->prio);
+      fprintf(stderr, "alsaplay: cannot set SCHED_FIFO priority %d.\n", p->prio);
   }
   /* avoid waiting 50000 ns collecting more sleep requests */
   prctl(PR_SET_TIMERSLACK, 1L);
+  timer_init();
 
   /* wait until the ring is full or the input complete */
   while (!atomic_load_explicit(&p->full, memory_order_acquire) &&
@@ -186,7 +229,7 @@ static void *playloop(void *arg)
   /* set start time (- nsec) */
   mtime = gettime();
   /* 24 ticks per microsecond */
-  mtick = getticks() + (long)(round(p->shift*0.024));
+  mtick = getticks() + (long)(round(p->shift*TICKSPERNS));
   tcount = 0;
   while (!last) {
     /* start playing when half of hwbuffer is filled */
@@ -213,7 +256,7 @@ static void *playloop(void *arg)
           sleepns(100000);
         /* continue with timing relative to now */
         mtime = gettime() - (long)(round(tcount*p->nsec));
-        mtick = getticks() + (long)(round(p->shift*0.024))
+        mtick = getticks() + (long)(round(p->shift*TICKSPERNS))
                 - (long)(round(tcount*p->ntick));
         continue;
       }
@@ -246,12 +289,12 @@ static void *playloop(void *arg)
   return NULL;
 }
 
-c4play *c4play_new(const char *device, int rate, long loopspersec,
-                   long hwbufsize, double extrabps, int nonblock,
-                   long shift, int warmup, int nrcp, long ringsize,
-                   int cpu, int prio, int verbose)
+alsaplay *alsaplay_new(const char *device, int rate, long loopspersec,
+                       long hwbufsize, double extrabps, int nonblock,
+                       long shift, int warmup, int nrcp, long ringsize,
+                       int cpu, int prio, int verbose)
 {
-  c4play *p;
+  alsaplay *p;
   snd_pcm_t *pcm;
   snd_pcm_hw_params_t *hwparams;
   snd_pcm_sw_params_t *swparams;
@@ -260,13 +303,13 @@ c4play *c4play_new(const char *device, int rate, long loopspersec,
   int i;
 
   if (rate % loopspersec != 0) {
-    fprintf(stderr, "c4play: sample rate %d is not a multiple of loops "
+    fprintf(stderr, "alsaplay: sample rate %d is not a multiple of loops "
             "per second %ld.\n", rate, loopspersec);
     exit(30);
   }
-  p = calloc(1, sizeof(c4play));
+  p = calloc(1, sizeof(alsaplay));
   if (!p) {
-    fprintf(stderr, "c4play: out of memory.\n");
+    fprintf(stderr, "alsaplay: out of memory.\n");
     exit(31);
   }
   p->olen = rate/loopspersec;
@@ -281,16 +324,16 @@ c4play *c4play_new(const char *device, int rate, long loopspersec,
   extraerr = 1.0*BPF*rate;
   extraerr = extraerr/(extraerr+extrabps);
   p->nsec = 1000000000*extraerr/loopspersec;
-  p->ntick = p->nsec*3/125;
+  p->ntick = p->nsec*TICKSPERNS;
   if (verbose)
-    fprintf(stderr, "c4play: %ld frames per loop, step size is %lf nsec.\n",
+    fprintf(stderr, "alsaplay: %ld frames per loop, step size is %lf nsec.\n",
             p->olen, p->nsec);
   /* ring, at least a few loops */
   p->size = ringsize - ringsize % BPF;
   if (p->size < 4*p->olen*BPF)
     p->size = 4*p->olen*BPF;
   if (posix_memalign((void**)&p->ring, 4096, p->size)) {
-    fprintf(stderr, "c4play: cannot allocate ring of %ld bytes.\n", p->size);
+    fprintf(stderr, "alsaplay: cannot allocate ring of %ld bytes.\n", p->size);
     exit(31);
   }
   memset(p->ring, 0, p->size);
@@ -302,7 +345,7 @@ c4play *c4play_new(const char *device, int rate, long loopspersec,
   /* temporary buffers */
   for (i = 1; i < (nrcp > 1 ? nrcp : 2); i++) {
     if (posix_memalign(p->tbufs+i, 4096, 2*p->olen*BPF)) {
-      fprintf(stderr, "c4play: cannot allocate buffer for cleaning.\n");
+      fprintf(stderr, "alsaplay: cannot allocate buffer for cleaning.\n");
       exit(31);
     }
   }
@@ -312,49 +355,49 @@ c4play *c4play_new(const char *device, int rate, long loopspersec,
   /* setup sound device */
   snd_pcm_hw_params_malloc(&hwparams);
   if (snd_pcm_open(&pcm, device, SND_PCM_STREAM_PLAYBACK, 0) < 0) {
-    fprintf(stderr, "c4play: error opening PCM device %s\n", device);
+    fprintf(stderr, "alsaplay: error opening PCM device %s\n", device);
     exit(32);
   }
   if (nonblock && snd_pcm_nonblock(pcm, 1) < 0) {
-    fprintf(stderr, "c4play: cannot set non-block mode.\n");
+    fprintf(stderr, "alsaplay: cannot set non-block mode.\n");
     exit(33);
   }
   if (snd_pcm_hw_params_any(pcm, hwparams) < 0) {
-    fprintf(stderr, "c4play: cannot configure this PCM device.\n");
+    fprintf(stderr, "alsaplay: cannot configure this PCM device.\n");
     exit(34);
   }
   if (snd_pcm_hw_params_set_access(pcm, hwparams,
                                    SND_PCM_ACCESS_MMAP_INTERLEAVED) < 0) {
-    fprintf(stderr, "c4play: error setting mmap access.\n");
+    fprintf(stderr, "alsaplay: error setting mmap access.\n");
     exit(35);
   }
   if (snd_pcm_hw_params_set_format(pcm, hwparams, SND_PCM_FORMAT_S32_LE) < 0) {
-    fprintf(stderr, "c4play: error setting format S32_LE.\n");
+    fprintf(stderr, "alsaplay: error setting format S32_LE.\n");
     exit(36);
   }
   if (snd_pcm_hw_params_set_rate(pcm, hwparams, rate, 0) < 0) {
-    fprintf(stderr, "c4play: error setting rate %d.\n", rate);
+    fprintf(stderr, "alsaplay: error setting rate %d.\n", rate);
     exit(37);
   }
   if (snd_pcm_hw_params_set_channels(pcm, hwparams, 2) < 0) {
-    fprintf(stderr, "c4play: error setting channels to 2.\n");
+    fprintf(stderr, "alsaplay: error setting channels to 2.\n");
     exit(38);
   }
   if (verbose) {
     snd_pcm_uframes_t min=1, max=100000000;
     snd_pcm_hw_params_set_buffer_size_minmax(pcm, hwparams, &min, &max);
-    fprintf(stderr, "c4play: min and max buffer size of device %ld .. %ld - ",
+    fprintf(stderr, "alsaplay: min and max buffer size of device %ld .. %ld - ",
             min, max);
   }
   if (snd_pcm_hw_params_set_buffer_size(pcm, hwparams, hwbufsize) < 0) {
-    fprintf(stderr, "\nc4play: error setting buffersize to %ld.\n", hwbufsize);
+    fprintf(stderr, "\nalsaplay: error setting buffersize to %ld.\n", hwbufsize);
     exit(39);
   }
   snd_pcm_hw_params_get_buffer_size(hwparams, &hwb);
   if (verbose)
     fprintf(stderr, " using %ld.\n", (long)hwb);
   if (snd_pcm_hw_params(pcm, hwparams) < 0) {
-    fprintf(stderr, "c4play: error setting HW params.\n");
+    fprintf(stderr, "alsaplay: error setting HW params.\n");
     exit(40);
   }
   snd_pcm_hw_params_free(hwparams);
@@ -362,7 +405,7 @@ c4play *c4play_new(const char *device, int rate, long loopspersec,
       snd_pcm_sw_params_current(pcm, swparams) < 0 ||
       snd_pcm_sw_params_set_start_threshold(pcm, swparams, hwb/2) < 0 ||
       snd_pcm_sw_params(pcm, swparams) < 0) {
-    fprintf(stderr, "c4play: cannot set SW params.\n");
+    fprintf(stderr, "alsaplay: cannot set SW params.\n");
     exit(41);
   }
   snd_pcm_sw_params_free(swparams);
@@ -371,15 +414,15 @@ c4play *c4play_new(const char *device, int rate, long loopspersec,
   return p;
 }
 
-void c4play_start(c4play *p)
+void alsaplay_start(alsaplay *p)
 {
   if (pthread_create(&p->thread, NULL, playloop, p) != 0) {
-    fprintf(stderr, "c4play: cannot create player thread.\n");
+    fprintf(stderr, "alsaplay: cannot create player thread.\n");
     exit(42);
   }
 }
 
-void c4play_write(c4play *p, const char *data, long len)
+void alsaplay_write(alsaplay *p, const char *data, long len)
 {
   long n, free, wp, off, k, fill, mf;
 
@@ -414,7 +457,7 @@ void c4play_write(c4play *p, const char *data, long len)
   }
 }
 
-void c4play_fill(c4play *p, double *ms, double *minms, long *waits)
+void alsaplay_fill(alsaplay *p, double *ms, double *minms, long *waits)
 {
   long mf;
 
@@ -426,11 +469,11 @@ void c4play_fill(c4play *p, double *ms, double *minms, long *waits)
   *waits = p->underruns;
 }
 
-void c4play_finish(c4play *p)
+void alsaplay_finish(alsaplay *p)
 {
   atomic_store_explicit(&p->eof, 1, memory_order_release);
   pthread_join(p->thread, NULL);
   if (p->verbose || p->underruns)
-    fprintf(stderr, "c4play: %ld bytes played, %ld times waited for input.\n",
+    fprintf(stderr, "alsaplay: %ld bytes played, %ld times waited for input.\n",
             (long)atomic_load(&p->rpos), p->underruns);
 }

@@ -3,6 +3,10 @@ VERSION=0.9.4.dev
 
 REFRESH=""
 
+# for resample_soxr_convolve_play/USB on the Odroid C4: make C4TIMER=-DC4TIMER
+# (timing with the 24 MHz system counter; rebuild after "make clean")
+C4TIMER=
+
 ARCH=$(shell uname -m)
 
 # normal CFLAGS
@@ -96,16 +100,16 @@ bin/resample_soxr_convolve: src/version.h src/nf_io.h src/resample_soxr_convolve
 resample_soxr_convolve: bin/resample_soxr_convolve
 
 # player thread as in myplayhrt_c4, compiled without optimization like it
-tmp/c4play.o: src/c4play.h src/c4play.c src/cprefresh.h |tmp
-	$(CC) $(CFLAGSNO) -c -o tmp/c4play.o src/c4play.c
+tmp/alsaplay.o: src/alsaplay.h src/alsaplay.c src/cprefresh.h |tmp
+	$(CC) $(CFLAGSNO) $(C4TIMER) -c -o tmp/alsaplay.o src/alsaplay.c
 
-bin/resample_soxr_convolve_play: src/version.h src/nf_io.h src/resample_soxr_convolve_play.c src/msconv.h src/c4play.h tmp/msconv.o tmp/fftconv.o tmp/c4play.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
-	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_play src/resample_soxr_convolve_play.c tmp/msconv.o tmp/fftconv.o tmp/c4play.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lasound -lpthread -lm -lrt
+bin/resample_soxr_convolve_play: src/version.h src/nf_io.h src/resample_soxr_convolve_play.c src/msconv.h src/alsaplay.h tmp/msconv.o tmp/fftconv.o tmp/alsaplay.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_play src/resample_soxr_convolve_play.c tmp/msconv.o tmp/fftconv.o tmp/alsaplay.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lasound -lpthread -lm -lrt
 
 resample_soxr_convolve_play: bin/resample_soxr_convolve_play
 
 tmp/usbplay.o: src/usbplay.h src/usbplay.c src/cprefresh.h |tmp
-	$(CC) $(CFLAGSNO) -c -o tmp/usbplay.o src/usbplay.c
+	$(CC) $(CFLAGSNO) $(C4TIMER) -c -o tmp/usbplay.o src/usbplay.c
 
 bin/resample_soxr_convolve_USB: src/version.h src/nf_io.h src/resample_soxr_convolve_USB.c src/msconv.h src/usbplay.h tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_USB src/resample_soxr_convolve_USB.c tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lusb-1.0 -lpthread -lm -lrt

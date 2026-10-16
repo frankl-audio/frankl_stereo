@@ -37,6 +37,9 @@ To compile the programs 'playhrt', 'bufhrt', 'volrace', 'writeloop',
 
 On ARM aarch64 (e.g., Raspi 4) use assembler code with:
   make REFRESH=AA64
+  
+On Odroid C4 (aarch64 with 24 MHz clock) use specific timer with
+  make REFRESH=AA64 C4TIMER=-DC4TIMER bin/resample_soxr_convolve_{play,USB}
 
 On X86 with 64 bits use assembler with:
   make REFRESH=X8664

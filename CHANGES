@@ -16,11 +16,15 @@
 
 - new player can optionally use more precise timing on Odroid C4.
 
+- new program for use in 'improvefile' scripts: 'improvedirect'.
+  This reads and writes small blocks in turns, instead of loading 
+  music data into RAM first.
+
 - part of the code for 0.9.4 was generated with the help of Claude code
   (rapid prototyping made it easy to generate and test various ideas for
   timing and cleaning - so far none of them sounded better than our previous
-  code - so except for the UAC2 player the code is mainly a rearrangement
-  of the previous code.
+  code - so except for the standalone convolver and the UAC2 player the 
+  code is mainly a rearrangement of the previous code).
         
 0.9.2 to 0.9.3
 

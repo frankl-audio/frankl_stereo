@@ -1,5 +1,5 @@
 
-VERSION=0.9.4.dev
+VERSION=0.9.4
 
 REFRESH=""
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #########################################################################
-##  frankl (C) 2015-2024
+##  frankl (C) 2015-2026
 ##  
 ##  USAGE:
 ##    improvefile <orig> <new>
@@ -15,6 +15,17 @@ if test -e "$2" ; then
   exit
 fi
 
+##  An alternative to using 'bufhrt' as below there is also a more
+##  specialized program, which I use as follows (very good but slow):
+##  
+##      improvedirect -v -o -i -w  "$1" "$2"   10 40960 10 128
+##  
+##  less good but much faster:
+##  
+##      improvetest -o -i -w  "$1" "$2" 10 4096000 10 2
+##  
+##  If applicable start the above on an isolated CPU (taskset -c 1 ....).
+##  
 
 ##  This utility is mainly meant for music files (and maybe certain filter and
 ##  program files for music playback).

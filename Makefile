@@ -18,7 +18,9 @@ CFLAGSNO=-O0 -Wall -z execstack -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$
 # targets
 ALL: bin tmp bin/volrace bin/bufhrt bin/highrestest \
      bin/writeloop bin/catloop bin/playhrt bin/cptoshm bin/shmcat \
-     bin/resample_soxr bin/cat64 bin/shownfinfo bin/music2nf
+     bin/resample_soxr bin/cat64 bin/shownfinfo bin/music2nf bin/improvedirect \
+     bin/resample_soxr_convolve bin/resample_soxr_convolve_play \
+     bin/resample_soxr_convolve_USB
 
 bin:
 	mkdir -p bin
@@ -125,6 +127,9 @@ bin/shownfinfo: src/version.h src/shownfinfo.c src/nf_io.h  |bin
 bin/music2nf: src/version.h src/nf_io.h src/music2nf.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/music2nf src/music2nf.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
 
+bin/improvedirect: src/version.h src/improvedirect.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGSNO) -o bin/improvedirect tmp/cprefresh.o tmp/cprefresh_ass.o src/improvedirect.c -lrt -lm
+
 
 
 # experimental, only compiled on demand
@@ -155,19 +160,13 @@ bin/bufhrt_c4: src/version.h tmp/net.o src/bufhrt_c4.c tmp/cprefresh.o tmp/cpref
 bin/forimprove_c4: src/version.h tmp/net.o src/forimprove_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/forimprove_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/forimprove_c4.c -lpthread -lrt -lm
 
-bin/improvetest: src/version.h src/improvetest.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
-	$(CC) $(CFLAGSNO) -o bin/improvetest tmp/cprefresh.o tmp/cprefresh_ass.o src/improvetest.c -lrt -lm
-
 bin/readlat: src/readlat.c |bin
 	$(CC) $(CFLAGS) -o bin/readlat src/readlat.c
-
-bin/forimprovedirect_c4: src/version.h tmp/net.o src/forimprovedirect_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
-	$(CC) $(CFLAGSNO) -o bin/forimprovedirect_c4 tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o src/forimprovedirect_c4.c -lpthread -lrt -lm
 
 bin/music2nf_c4: src/version.h src/nf_io.h src/music2nf_c4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGSNO) -o bin/music2nf_c4 src/music2nf_c4.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
 
-c4: bin/by4 bin/myplayhrt_c4 bin/bufhrt_c4 bin/forimprove_c4 bin/forimprovedirect_c4 bin/music2nf_c4 bin/improvetest bin/readlat
+c4: bin/by4 bin/myplayhrt_c4 bin/bufhrt_c4 bin/forimprove_c4 bin/music2nf_c4 bin/readlat
 
 clean: 
 	rm -rf src/version.h bin tmp

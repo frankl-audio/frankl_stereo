@@ -1,5 +1,10 @@
        frankl's stereo utilities - Installation
 
+Short for Debian/Ubuntu users (more explanations below): start with
+
+    sudo apt-get install gcc libasound2-dev libsoxr-dev libsndfile-dev \
+                         libfftw3-dev libusb-1.0-0-dev 
+
 
 You need a Linux system with a C-compiler and header files for libasound.
 (on Debian/Ubuntu and similar distributions:
@@ -17,8 +22,10 @@ or you may have to install libsoxr by hand, see
 )
 
 The programs 'msfir' and 'resample_soxr_convolve' need additionally the
-'fftw3' library (on Debian/Ubuntu: sudo apt-get install libfftw3-dev), they
-are not built by default, use 'make msfir' and 'make resample_soxr_convolve'.
+'fftw3' library (on Debian/Ubuntu: sudo apt-get install libfftw3-dev).
+
+For 'resample_soxr_convolve_USB' also the 'libusb-1.0.0' library is needed
+(on Debian/Ubuntu:  sudo apt-get install libusb-1.0-0-dev).
 
 For 'cat64' the 'sndfile' library is needed.
 (On Debian/Ubuntu, etc, use

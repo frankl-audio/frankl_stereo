@@ -1,10 +1,9 @@
 /*
-improvetest.c                Copyright frankl 2025-2026
+improvedirect.c                Copyright frankl 2025-2026
 
-Extended variant of forimprovedirect_c4.c for experiments (Odroid C4, on
-other machines only for testing the program logic). Without options it
-does the same as forimprovedirect_c4, see the usage message for the
-additional options.
+Extended variant of (now obsolete) forimprovedirect_c4.c. 
+Precise timing on Odroid C4, using 24 MHz system clock.
+Otherwise measured nanoseconds are translated to ticks.
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
@@ -36,7 +35,7 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 void usage()
 {
   fprintf(stderr,
-"Usage:  improvetest [options] origfile copiedfile lps bps nsync ncp\n"
+"Usage:  improvedirect [options] origfile copiedfile lps bps nsync ncp\n"
 "\n"
 "  Copies origfile to copiedfile in lps loops per second with bps bytes\n"
 "  per second, calls fdatasync every nsync loops and copies each chunk\n"
@@ -164,7 +163,7 @@ int main(int argc, char *argv[])
     if (idirect)
         iflags |= O_DIRECT;
     if ((ifd = open(argv[optind], iflags)) == -1) {
-        fprintf(stderr, "improvetest: Cannot open input file %s: %s.\n",
+        fprintf(stderr, "improvedirect: Cannot open input file %s: %s.\n",
                         argv[optind], strerror(errno));
         exit(2);
     }
@@ -177,25 +176,25 @@ int main(int argc, char *argv[])
         oflags |= O_DSYNC;
     ofd = open(argv[optind+1], oflags, 00644);
     if (ofd == -1) {
-        fprintf(stderr, "improvetest: Cannot open output file %s.\n   %s\n",
+        fprintf(stderr, "improvedirect: Cannot open output file %s.\n   %s\n",
                          argv[optind+1], strerror(errno));
         exit(3);
     }
     if (prealloc && fstat(ifd, &sb) == 0 && sb.st_size > 0 &&
         fallocate(ofd, 0, 0, sb.st_size) != 0)
-        fprintf(stderr, "improvetest: fallocate failed: %s.\n", strerror(errno));
+        fprintf(stderr, "improvedirect: fallocate failed: %s.\n", strerror(errno));
     lps = atol(argv[optind+2]);
     bps = atol(argv[optind+3]);
     nsync = atol(argv[optind+4]);
     outcopies = atol(argv[optind+5]);
     if (lps < 1 || bps < 1 || nsync < 1 || outcopies < 1 || outcopies > 1000) {
-        fprintf(stderr, "improvetest: invalid arguments.\n");
+        fprintf(stderr, "improvedirect: invalid arguments.\n");
         exit(4);
     }
     olen = bps/lps;
     olen -= olen % align;
     if (olen <= 0) {
-        fprintf(stderr, "improvetest: chunk size %ld/%ld is smaller than %ld.\n",
+        fprintf(stderr, "improvedirect: chunk size %ld/%ld is smaller than %ld.\n",
                 bps, lps, align);
         exit(4);
     }
@@ -203,7 +202,7 @@ int main(int argc, char *argv[])
     ntick = nsec*3/125;
     outtime = (long)(nsec/outcopies/3);
     if (verbose)
-        fprintf(stderr, "improvetest: %ld bytes per loop (%ld bytes/s), "
+        fprintf(stderr, "improvedirect: %ld bytes per loop (%ld bytes/s), "
                 "output%s%s, input%s, warm-up %d, preallocate %d\n",
                 olen, olen*lps, odirect ? " O_DIRECT" : "",
                 dsync ? " O_DSYNC" : "", idirect ? " O_DIRECT" : "",
@@ -219,12 +218,12 @@ int main(int argc, char *argv[])
     nsloopfactor = 1.0*10000000/(mtime1-mtime-50);
 
     if (posix_memalign(&tbuf, 4096, 2*olen)) {
-        fprintf(stderr, "improvetest: Cannot allocate input buffer.\n");
+        fprintf(stderr, "improvedirect: Cannot allocate input buffer.\n");
         exit(2);
     }
     for (i=1; i < outcopies; i++) {
         if (posix_memalign(obufs+i, 4096, 2*olen)) {
-            fprintf(stderr, "improvetest: Cannot allocate buffer for output cleaning.\n");
+            fprintf(stderr, "improvedirect: Cannot allocate buffer for output cleaning.\n");
             exit(20);
         }
     }
@@ -243,7 +242,7 @@ int main(int argc, char *argv[])
     for (moreinput=1; moreinput;) {
         s = read(ifd, tbuf, olen);
         if (s < 0) {
-            fprintf(stderr, "improvetest: Read error: %s.\n", strerror(errno));
+            fprintf(stderr, "improvedirect: Read error: %s.\n", strerror(errno));
             exit(18);
         }
         if (s == 0) {
@@ -281,7 +280,7 @@ int main(int argc, char *argv[])
         spinto(etick);
         /* write a chunk, this comes first after waking from sleep */
         if (write(ofd, tbuf, w) != w) {
-            fprintf(stderr, "improvetest: Write error: %s.\n", strerror(errno));
+            fprintf(stderr, "improvedirect: Write error: %s.\n", strerror(errno));
             exit(15);
         }
         total += s;
@@ -303,12 +302,12 @@ int main(int argc, char *argv[])
     fdatasync(ofd);
     /* remove the padding of the last chunk */
     if (odirect && ftruncate(ofd, total) != 0) {
-        fprintf(stderr, "improvetest: Cannot truncate output: %s.\n", strerror(errno));
+        fprintf(stderr, "improvedirect: Cannot truncate output: %s.\n", strerror(errno));
         exit(16);
     }
     fdatasync(ofd);
     if (verbose)
-        fprintf(stderr, "improvetest: %ld bytes written, %ld fdatasync, "
+        fprintf(stderr, "improvedirect: %ld bytes written, %ld fdatasync, "
                 "timer reset %ld times\n", total, nsyncs, nresets);
 
     posix_fadvise(ofd, 0, 0, POSIX_FADV_DONTNEED);

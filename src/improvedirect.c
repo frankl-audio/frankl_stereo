@@ -35,6 +35,9 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 void usage()
 {
   fprintf(stderr,
+          "improvedirect (version %s of frankl's stereo utilities)\n\n",
+          VERSION);
+  fprintf(stderr,
 "Usage:  improvedirect [options] origfile copiedfile lps bps nsync ncp\n"
 "\n"
 "  Copies origfile to copiedfile in lps loops per second with bps bytes\n"

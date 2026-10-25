@@ -4,8 +4,8 @@ resample_soxr.c                Copyright frankl 2018-2024
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
 http://www.gnu.org/licenses/gpl.txt for license details.
-Compile with
-    gcc -o resample_soxr -O2 resample_soxr.c -lsoxr -lsndfile -lrt
+For compilation see the Makefile (needs also cprefresh.c, directread.c
+and the libraries soxr, sndfile).
 */
 #define _GNU_SOURCE
 #include "version.h"
@@ -24,6 +24,7 @@ Compile with
 #include <soxr.h>
 #include "cprefresh.h"
 #include "nf_io.h"
+#include "directread.h"
 
 /* help page */
 /* vim hint to remove resp. add quotes:
@@ -111,6 +112,28 @@ void usage( ) {
 "  --file=fname, -f fname\n"
 "      name of an input audio file (flac, wav, aiff, ...). The default\n"
 "      is input from stdin.\n"
+"\n"
+"  --direct-read=intval\n"
+"      read the file given with '--file' with O_DIRECT (bypassing the page\n"
+"      cache, read-ahead and the copy from kernel memory) in chunks of\n"
+"      intval pages (of 4096 bytes) at page aligned offsets. Without the\n"
+"      next option a chunk is read when the decoder needs data behind the\n"
+"      previous chunk. The default is 0 (normal reads by libsndfile).\n"
+"\n"
+"  --periodic-read\n"
+"      with '--direct-read' and '--realtime': the file data are read into a\n"
+"      ring buffer (see '--read-buffer') with one chunk per loop of the\n"
+"      timer (directly after the sleep, before decoding); the read is\n"
+"      skipped if the ring is full. So intval pages per loop must be more\n"
+"      than the average file data per loop, with '--verbose' the average\n"
+"      over the file is shown at startup (a warning is always shown if\n"
+"      the headroom is less than 10%%). The ring is filled before the\n"
+"      first loop. If it runs empty, a chunk is read on demand (an\n"
+"      underrun, shown with '--verbose').\n"
+"\n"
+"  --read-buffer=intval\n"
+"      size of the ring buffer for '--periodic-read' in pages (rounded up\n"
+"      to a multiple of the chunk size). The default is 256 (1 MB).\n"
 "\n"
 "  --shmname=sname, -i sname\n"
 "      name of an audio file in shared memory. The default\n"
@@ -334,6 +357,11 @@ int main(int argc, char *argv[])
   struct timespec mtime;
   struct timespec currtime;
   long cnt;
+  /* optional O_DIRECT input */
+  directread *dr = NULL;
+  long drpages, drring;
+  int drperiodic;
+  double drloop;
 
   for(i=0; i<1024; carry[i] = 0.0, i++);
 
@@ -367,6 +395,9 @@ int main(int argc, char *argv[])
       {"number-copies", required_argument, 0, 'R' },
       {"number-copies-input", required_argument, 0, 'C' },
       {"toint32", no_argument, 0, 'I' },
+      {"direct-read", required_argument, 0, 1019 },
+      {"periodic-read", no_argument, 0, 1020 },
+      {"read-buffer", required_argument, 0, 1021 },
       {"verbose", no_argument, 0, 'p' },
       {"version", no_argument, 0, 'V' },
       {"help", no_argument, 0, 'h' },
@@ -401,6 +432,9 @@ int main(int argc, char *argv[])
   verbose = 0;
   nrcp = 0;
   nricp = 0;
+  drpages = 0;
+  drring = 256;
+  drperiodic = 0;
   while ((optc = getopt_long(argc, argv, 
           "M:N:i:o:P:B:e:T:r:v:d:a:F:l:c:f:m:s:u:n:C:R:b:IpVh",
           longoptions, &optind)) != -1) {
@@ -491,6 +525,16 @@ int main(int argc, char *argv[])
       case 'I':
         out32 = 1;
         break;
+      case 1019:
+        drpages = atol(optarg);
+        if (drpages < 0) drpages = 0;
+        break;
+      case 1020:
+        drperiodic = 1;
+        break;
+      case 1021:
+        drring = atol(optarg);
+        break;
       case 'p':
         verbose = 1;
         break;
@@ -509,6 +553,11 @@ int main(int argc, char *argv[])
       fprintf(stderr, "resample_soxr: nothing to read.\n");
       exit(1);
   }
+  if ((drpages && !fnam) || (drperiodic && (!drpages || rt == 0.0))) {
+      fprintf(stderr, "resample_soxr: --direct-read only with --file, "
+              "--periodic-read only with --direct-read and --realtime.\n");
+      exit(1);
+  }
   sanitizeraceparams(&delay, &att, nch);
   /* remember modification time of race parameter file */
   if (pnam)
@@ -521,8 +570,13 @@ int main(int argc, char *argv[])
           fprintf(stderr, "resample_soxr: opening file %s.\n", fnam);
           fflush(stderr);
       }
-      fd = open(fnam, O_RDONLY | O_NOATIME);
-      sndfile = sf_open_fd(fd, SFM_READ, &sfinfo, 1);
+      if (drpages) {
+          dr = directread_open(fnam, drpages, drperiodic ? drring : drpages);
+          sndfile = sf_open_virtual(&directread_vio, SFM_READ, &sfinfo, dr);
+      } else {
+          fd = open(fnam, O_RDONLY | O_NOATIME);
+          sndfile = sf_open_fd(fd, SFM_READ, &sfinfo, 1);
+      }
       if (sndfile == NULL) {
           fprintf(stderr, "resample_soxr: cannot open file %s.\n", fnam);
           exit(2);
@@ -655,6 +709,22 @@ int main(int argc, char *argv[])
       mtime.tv_sec++;
     }
   }
+  /* periodic O_DIRECT input: compare chunk size with the average file
+     data per loop (from the current position), then fill the ring */
+  if (dr && drperiodic) {
+    drloop = 0.0;
+    if (sfinfo.frames > start)
+      drloop = (double)(directread_filelen(dr) - directread_pos(dr)) /
+               (sfinfo.frames - start) * blen / 4096.0;
+    if (verbose)
+      fprintf(stderr, "resample_soxr: average file data per loop "
+              "%.2f pages, reading %ld pages per loop.\n", drloop, drpages);
+    if (drpages < 1.1*drloop)
+      fprintf(stderr, "resample_soxr: WARNING: --direct-read=%ld "
+              "is less than 10%% above the average file data per loop "
+              "(%.2f pages).\n", drpages, drloop);
+    directread_fill(dr);
+  }
   /* we read from stdin or file/shared mem/nf file until eof or total (if >0) and write to stdout */
   cnt = 0;
   while (1) {
@@ -678,6 +748,8 @@ int main(int argc, char *argv[])
         dtime = ((mtime.tv_sec - currtime.tv_sec)*1000000000 + mtime.tv_nsec -currtime.tv_nsec)/1000;
         if (verbose) {
           fprintf(stderr, "\nmusec to wait in realtime mode: %ld \n", dtime);
+          if (dr)
+            directread_stats(dr, stderr);
         }
         if (dtime < -1000) {
           clock_gettime(CLOCK_MONOTONIC, &mtime);
@@ -689,6 +761,8 @@ int main(int argc, char *argv[])
         }
       }
       clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &mtime, NULL);
+      if (dr && drperiodic)
+        directread_periodic(dr);
     }
     if (sndfile) {
         mlen = sf_readf_double(sndfile, inp, mlen);
@@ -848,6 +922,11 @@ int main(int argc, char *argv[])
   soxr_delete(soxr);
   free(out);
   sf_close(sndfile);
+  if (dr) {
+    if (verbose)
+      directread_stats(dr, stderr);
+    directread_close(dr);
+  }
   if (verbose) {
     fprintf(stderr, "resample_soxr: %ld input and %ld output samples\n", 
             (long)intotal, (long)outtotal);

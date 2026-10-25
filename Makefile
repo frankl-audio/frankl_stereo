@@ -80,8 +80,8 @@ bin/cptoshm: src/version.h src/cptoshm.c tmp/cprefresh_ass.o tmp/cprefresh.o |bi
 bin/shmcat: src/version.h src/shmcat.c tmp/cprefresh_ass.o tmp/cprefresh.o |bin
 	$(CC) $(CFLAGS) -o bin/shmcat tmp/cprefresh_ass.o tmp/cprefresh.o src/shmcat.c -lrt
 
-bin/resample_soxr: src/version.h src/nf_io.h src/resample_soxr.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
-	$(CC) $(CFLAGS) -o bin/resample_soxr src/resample_soxr.c tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lrt
+bin/resample_soxr: src/version.h src/nf_io.h src/resample_soxr.c src/directread.h tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/resample_soxr src/resample_soxr.c tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lrt
 
 resampler: bin/resample_soxr
 
@@ -96,8 +96,8 @@ bin/msfir: src/version.h src/msfir.c src/msconv.h tmp/msconv.o tmp/fftconv.o |bi
 
 msfir: bin/msfir
 
-bin/resample_soxr_convolve: src/version.h src/nf_io.h src/resample_soxr_convolve.c src/msconv.h tmp/msconv.o tmp/fftconv.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
-	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve src/resample_soxr_convolve.c tmp/msconv.o tmp/fftconv.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lpthread -lm -lrt
+bin/resample_soxr_convolve: src/version.h src/nf_io.h src/resample_soxr_convolve.c src/directread.h src/msconv.h tmp/msconv.o tmp/fftconv.o tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve src/resample_soxr_convolve.c tmp/msconv.o tmp/fftconv.o tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lpthread -lm -lrt
 
 resample_soxr_convolve: bin/resample_soxr_convolve
 
@@ -105,8 +105,8 @@ resample_soxr_convolve: bin/resample_soxr_convolve
 tmp/alsaplay.o: src/alsaplay.h src/alsaplay.c src/cprefresh.h |tmp
 	$(CC) $(CFLAGSNO) $(C4TIMER) -c -o tmp/alsaplay.o src/alsaplay.c
 
-bin/resample_soxr_convolve_play: src/version.h src/nf_io.h src/resample_soxr_convolve_play.c src/msconv.h src/alsaplay.h tmp/msconv.o tmp/fftconv.o tmp/alsaplay.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
-	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_play src/resample_soxr_convolve_play.c tmp/msconv.o tmp/fftconv.o tmp/alsaplay.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lasound -lpthread -lm -lrt
+bin/resample_soxr_convolve_play: src/version.h src/nf_io.h src/resample_soxr_convolve_play.c src/directread.h src/msconv.h src/alsaplay.h tmp/msconv.o tmp/fftconv.o tmp/alsaplay.o tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_play src/resample_soxr_convolve_play.c tmp/msconv.o tmp/fftconv.o tmp/alsaplay.o tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lasound -lpthread -lm -lrt
 
 resample_soxr_convolve_play: bin/resample_soxr_convolve_play
 

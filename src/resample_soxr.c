@@ -87,7 +87,7 @@ void usage( ) {
 "\n"
 "  --buffer-length=intval, -b intval\n"
 "      the size of the input buffer in number of frames. The default\n"
-"      (and minimal value) is 8192 and should usually be fine.\n"
+"      is 8192 (minimum 256).\n"
 "\n"
 "  --phase=floatval, -P floatval\n"
 "      the phase response of the filter used during resampling; see the \n"

@@ -1,5 +1,11 @@
         Changes between published versions
 
+0.9.4 to 0.9.5
+
+- new options --direct-read --read-buffer --periodic-read for 
+  resample_soxr and its combined variants. Reads input files with
+  O_DIRECT into small buffer, avoiding various caches of the system.
+
 0.9.3 to 0.9.4
 
 - new function 'msfir' as standalone for the authors usual use of 'brutefir'

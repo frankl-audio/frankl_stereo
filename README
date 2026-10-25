@@ -13,7 +13,7 @@ Overview:
 
  - playhrt
       reads an audio stream from the network, stdin or a file and plays 
-      it on a sound device
+      it on a sound device using ALSA
 
  - bufhrt
       reads data from stdin, a file, or the network and writes them
@@ -30,8 +30,33 @@ Overview:
  - cptoshm/shmcat
       writing and reading data to and from shared memory
 
+ - msfir
+      convolver for S-channel (e.g., Loco) and L/R channel,
+      read 64 bit float samples from stdin and writes filtered
+      data as 64 bit float or 32 bit integers to stdout
+
+ - improvedirect
+      copies files, very slow such copies of music files can sound
+      better; see comments in scripts/improvefile
+
  - resample_soxr
       standalone resampler in 64-bit operation using soxr library
+ 
+ - resample_soxr_convolve
+      combination of resample_soxr and msfir in one program with
+      two threads
+
+ - resample_soxr_convolve_play
+      combination of resample_soxr and msfir and playhrt in one program
+      with three threads
+
+ - resample_soxr_convolve_USB
+      like resample_soxr_convolve_play for playing 32 bit signed integer
+      samples on a USB sound device (DAC or DDC), this does not use ALSA
+      but uses the UAC2 protocol directly
+
+  - the combined resampler-convolver-player programs have a compile
+    option for particularly precise timing on Odroid C4 computers
 
  - cat64
       read sound file or shared memory and output samples as 64-bit
@@ -55,7 +80,7 @@ them to the output stream.
 See the file INSTALL for installation instructions.
 
 Web page:
-    http://frankl.luebecknet.de/stereoutils/index.html
+    http://frankl.luebecknet.de/stereoutils/
 
 Report problems and suggest improvements via the issue tracker:
     https://github.com/frankl-audio/frankl_stereo/issues

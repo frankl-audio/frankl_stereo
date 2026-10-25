@@ -6,24 +6,25 @@ See the file License.txt of the distribution and
 http://www.gnu.org/licenses/gpl.txt for license details.
 
 Here are some utility functions to clean or refresh RAM.
-Optionally, they use assembler functions on ARM.
+Optionally, they use assembler functions on ARM and X86_64.
 */
 
 #include <string.h>
+#include "cprefresh.h"
 
 #ifdef REFRESHVFP
 /* on ARM with some version of the CPU feature 'vfp' */
-inline void memcp_vfpX(void*, void*, int);
-inline void memclean_vfpX(void*, int);
+void memcp_vfpX(void*, void*, int);
+void memclean_vfpX(void*, int);
 
-inline void refreshmem(char* ptr, long n)
+void refreshmem(char* ptr, long n)
 {
   /* we make shure below that we can access ptr-off */
   int off;
   off = (unsigned int)ptr % 8;
   memcp_vfpX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/8)*8);
 }
-inline void refreshmems(char* ptr, long n, int k)
+void refreshmems(char* ptr, long n, long k)
 {
   /* we make shure below that we can access ptr-off */
   int off, j;
@@ -31,7 +32,7 @@ inline void refreshmems(char* ptr, long n, int k)
   for(j=k; j; j--)
       memcp_vfpX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/8)*8);
 }
-inline void memclean(char* ptr, long n)
+void memclean(char* ptr, long n)
 {
   int i, off, n0;
   off = (unsigned int)ptr % 8;
@@ -44,7 +45,7 @@ inline void memclean(char* ptr, long n)
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
-inline void cprefresh(char* dest, char* ptr, long n)
+void cprefresh(char* dest, char* ptr, long n)
 {
   memclean(dest, n);
   memcpy(dest, ptr, n);
@@ -55,17 +56,17 @@ inline void cprefresh(char* dest, char* ptr, long n)
 #else
 #ifdef REFRESHARM
 /* on ARM with no CPU feature 'neon' or 'vfp', currently disabled, we use C-version instead */
-inline void memcp_regX(void*, void*, int);
-inline void memclean_reg(void*, int);
+void memcp_regX(void*, void*, int);
+void memclean_reg(void*, int);
 
-inline void refreshmem(char* ptr, long n)
+void refreshmem(char* ptr, long n)
 {
   /* we make shure below that we can access ptr-off */
   int off;
   off = (unsigned int)ptr % 4;
   memcp_regX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/4)*4);
 }
-inline void refreshmems(char* ptr, long n, int k)
+void refreshmems(char* ptr, long n, long k)
 {
   /* we make shure below that we can access ptr-off */
   int off, j;
@@ -73,7 +74,7 @@ inline void refreshmems(char* ptr, long n, int k)
   for(j=k; j; j--)
       memcp_regX((void*)(ptr-off), (void*)(ptr-off), ((n+off)/4)*4);
 }
-inline void memclean(char* ptr, long n)
+void memclean(char* ptr, long n)
 {
   int i, off, n0;
   off = (unsigned int)ptr % 4;
@@ -86,7 +87,7 @@ inline void memclean(char* ptr, long n)
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
-inline void cprefresh(char* dest, char* ptr, long n)
+void cprefresh(char* dest, char* ptr, long n)
 {
   memclean(dest, n);
   memcpy(dest, ptr, n);
@@ -99,15 +100,15 @@ inline void cprefresh(char* dest, char* ptr, long n)
 #include <stdio.h>
 
 /* n is number of 8 byte quad words */
-inline void refreshmem_aa64(void* addr, int n);
-inline void memclean_aa64(void* addr, int n);
-inline void cprefresh_aa64(void* addr, int n, void* dest);
-inline void refresh64bit_aa64(void* addr, int n);
-inline void cp64bit_aa64(void* addr, int n, void* dest);
-inline void clean64bit_aa64(void* addr, int n);
+void refreshmem_aa64(void* addr, int n);
+void memclean_aa64(void* addr, int n);
+void cprefresh_aa64(void* addr, int n, void* dest);
+void refresh64bit_aa64(void* addr, int n);
+void cp64bit_aa64(void* addr, int n, void* dest);
+void clean64bit_aa64(void* addr, int n);
 
 /* nb is number of bytes */
-inline void refreshmem(char* ptr, long nb) {
+void refreshmem(char* ptr, long nb) {
   long n, off;
   void *vp;
   /* ignore first and last bytes if not 8-byte aligned */
@@ -121,7 +122,7 @@ inline void refreshmem(char* ptr, long nb) {
   refresh64bit_aa64(vp, n);
 }
 
-inline void refreshmems(char* ptr, long nb, long k) {
+void refreshmems(char* ptr, long nb, long k) {
   long n, off, j;
   void *vp;
   /* ignore first and last bytes if not 8-byte aligned */
@@ -135,7 +136,7 @@ inline void refreshmems(char* ptr, long nb, long k) {
       refreshmem_aa64(vp, n);
 }
 
-inline void memclean(char* ptr, long n)
+void memclean(char* ptr, long n)
 {
   int i, off, n0;
   /* handle first and last bytes separately, if not 8-byte aligned */
@@ -150,7 +151,7 @@ inline void memclean(char* ptr, long n)
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
-inline void cprefresh(char* dest, char* ptr, long n)
+void cprefresh(char* dest, char* ptr, long n)
 {
   int n0;
   if (((unsigned long)ptr % 8) != 0 || ((unsigned long)dest % 8) != 0) {
@@ -171,13 +172,13 @@ inline void cprefresh(char* dest, char* ptr, long n)
 #include <stdint.h>
 
 /* n is number of 8 byte quad words */
-inline void refreshmem_x8664(void* addr, int n);
-inline void refresh64_x8664(void* addr, int n);
-inline void cp64_x8664(void* addr, int n, void* dest);
-inline void memclean64_x8664(void* addr, int n);
+void refreshmem_x8664(void* addr, int n);
+void refresh64_x8664(void* addr, int n);
+void cp64_x8664(void* addr, int n, void* dest);
+void memclean64_x8664(void* addr, int n);
 
 /* nb is number of bytes */
-inline void refreshmem(char* ptr, long nb) {
+void refreshmem(char* ptr, long nb) {
   long n, off;
   void *vp;
   /* ignore first and last bytes if not 8-byte aligned */
@@ -190,7 +191,7 @@ inline void refreshmem(char* ptr, long nb) {
   refresh64_x8664(vp, n);
 }
 
-inline void refreshmems(char* ptr, long nb, long k) {
+void refreshmems(char* ptr, long nb, long k) {
   long n, off, j;
   void *vp;
   /* ignore first and last bytes if not 8-byte aligned */
@@ -204,7 +205,7 @@ inline void refreshmems(char* ptr, long nb, long k) {
       refresh64_x8664(vp, n);
 }
 
-inline void memclean(char* ptr, long n)
+void memclean(char* ptr, long n)
 {
   long i, off, n0;
   /* handle first and last bytes separately, if not 8-byte aligned */
@@ -219,7 +220,7 @@ inline void memclean(char* ptr, long n)
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
-inline void cprefresh(char* dest, char* ptr, long n)
+void cprefresh(char* dest, char* ptr, long n)
 {
   long n0;
   if (((unsigned long)ptr % 8) != 0 || ((unsigned long)dest % 8) != 0) {
@@ -239,7 +240,7 @@ inline void cprefresh(char* dest, char* ptr, long n)
 #include <stdint.h>
 /* default version in C, compile with -O0, such that this is not
    optimized away */
-inline void refreshmem(char* ptr, long n)
+void refreshmem(char* ptr, long n)
 {
   /* we make shure below that we can access ptr-off */
   long i, sz, off;
@@ -255,14 +256,14 @@ inline void refreshmem(char* ptr, long n)
       up++;
   }
 }
-inline void refreshmems(char* ptr, long n, long k)
+void refreshmems(char* ptr, long n, long k)
 {
   long j;
   for(j=k; j; j--)
       refreshmem(ptr, n);
 }
 
-inline void memclean(char* ptr, long n)
+void memclean(char* ptr, long n)
 {
   long i, off, n0, sz;
   unsigned int *up;
@@ -283,7 +284,7 @@ inline void memclean(char* ptr, long n)
   for (; n0+off < n; n0++) ptr[n0+off] = 0;
 }
 
-inline void cprefresh(char* dest, char* ptr, long n)
+void cprefresh(char* dest, char* ptr, long n)
 {
   memclean(dest, n);
   memcpy(dest, ptr, n);

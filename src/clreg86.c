@@ -1,6 +1,6 @@
 /*
 gcc -c -O0 cprefresh_x8664.s
-gcc -o clreg86 -O0 -z execstack clreg86.c cprefresh_x8664.o
+gcc -o clreg86 -O0 clreg86.c cprefresh_x8664.o
 */
 
 #include <time.h>

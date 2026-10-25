@@ -373,6 +373,7 @@ int main(int argc, char *argv[])
     nonblock = 0;
     innetbufsize = 0;
     corr = 0;
+    checkav = 0;
     verbose = 0;
     stripped = 0;
     dobufstats = 1;

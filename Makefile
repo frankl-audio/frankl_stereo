@@ -10,10 +10,10 @@ C4TIMER=
 ARCH=$(shell uname -m)
 
 # normal CFLAGS
-CFLAGS=-O2 -Wall -z execstack -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$(REFRESH)
+CFLAGS=-O2 -Wall -D_FILE_OFFSET_BITS=64 -DREFRESH$(REFRESH)
 
 # CFLAGS without optimization
-CFLAGSNO=-O0 -Wall -z execstack -D_FILE_OFFSET_BITS=64 -fgnu89-inline -DREFRESH$(REFRESH)
+CFLAGSNO=-O0 -Wall -D_FILE_OFFSET_BITS=64 -DREFRESH$(REFRESH)
 
 # targets
 ALL: bin tmp bin/volrace bin/bufhrt bin/highrestest \
@@ -114,7 +114,7 @@ tmp/usbplay.o: src/usbplay.h src/usbplay.c src/cprefresh.h |tmp
 	$(CC) $(CFLAGSNO) $(C4TIMER) -c -o tmp/usbplay.o src/usbplay.c
 
 tmp/directread.o: src/directread.h src/directread.c |tmp
-	$(CC) $(CFLAGSNO) -c -o tmp/directread.o src/directread.c
+	$(CC) $(CFLAGS) -c -o tmp/directread.o src/directread.c
 
 bin/resample_soxr_convolve_USB: src/version.h src/nf_io.h src/resample_soxr_convolve_USB.c src/msconv.h src/usbplay.h src/directread.h tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
 	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_USB src/resample_soxr_convolve_USB.c tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lusb-1.0 -lpthread -lm -lrt
@@ -149,7 +149,7 @@ bin/myplayhrt: src/version.h tmp/net.o src/myplayhrt.c tmp/cprefresh.o tmp/cpref
 	$(CC) $(CFLAGSNO) -o bin/myplayhrt src/myplayhrt.c tmp/net.o tmp/cprefresh.o tmp/cprefresh_ass.o -lasound -lpthread -lrt
 
 bin/by4: src/by4.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
-	$(CC) $(CFLAGSNO) -o bin/by4 src/by4.c tmp/cprefresh.o tmp/cprefresh_ass.o
+	$(CC) $(CFLAGS) -o bin/by4 src/by4.c tmp/cprefresh.o tmp/cprefresh_ass.o
 
 tmp/counttotick_aa64.o: src/counttotick_aa64.h src/counttotick_aa64.s |tmp
 	$(CC) $(CFLAGSNO) -o tmp/counttotick_aa64.o -c src/counttotick_aa64.s

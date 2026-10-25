@@ -453,4 +453,5 @@ cleanregs_x8664:
 	.cfi_endproc
 
 
-.section .note.GNU-stack,"x",@progbits
+
+	.section .note.GNU-stack,"",%progbits

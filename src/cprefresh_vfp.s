@@ -48,3 +48,5 @@ memclean_vfpX:
 	bgt memclean_vfpX
 	mov pc, lr
 
+
+	.section .note.GNU-stack,"",%progbits

@@ -309,7 +309,7 @@ int printsstat(long* sstat) {
 }
 
 /* difference t2 - t1 in ns */
-inline long difftimens(struct timespec t1, struct timespec t2)
+static inline long difftimens(struct timespec t1, struct timespec t2)
 { 
    long long l1, l2;
    l1 = t1.tv_sec*1000000000 + t1.tv_nsec;

@@ -40,3 +40,5 @@ memclean_reg:
         bgt memclean_reg
         mov pc, lr
 
+
+	.section .note.GNU-stack,"",%progbits

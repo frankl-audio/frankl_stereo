@@ -113,8 +113,11 @@ resample_soxr_convolve_play: bin/resample_soxr_convolve_play
 tmp/usbplay.o: src/usbplay.h src/usbplay.c src/cprefresh.h |tmp
 	$(CC) $(CFLAGSNO) $(C4TIMER) -c -o tmp/usbplay.o src/usbplay.c
 
-bin/resample_soxr_convolve_USB: src/version.h src/nf_io.h src/resample_soxr_convolve_USB.c src/msconv.h src/usbplay.h tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
-	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_USB src/resample_soxr_convolve_USB.c tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lusb-1.0 -lpthread -lm -lrt
+tmp/directread.o: src/directread.h src/directread.c |tmp
+	$(CC) $(CFLAGSNO) -c -o tmp/directread.o src/directread.c
+
+bin/resample_soxr_convolve_USB: src/version.h src/nf_io.h src/resample_soxr_convolve_USB.c src/msconv.h src/usbplay.h src/directread.h tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o |bin
+	$(CC) $(CFLAGS) -o bin/resample_soxr_convolve_USB src/resample_soxr_convolve_USB.c tmp/msconv.o tmp/fftconv.o tmp/usbplay.o tmp/directread.o tmp/cprefresh.o tmp/cprefresh_ass.o -lsoxr -lsndfile -lfftw3 -lusb-1.0 -lpthread -lm -lrt
 
 resample_soxr_convolve_USB: bin/resample_soxr_convolve_USB
 

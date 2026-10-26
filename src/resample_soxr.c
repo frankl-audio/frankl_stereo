@@ -330,7 +330,7 @@ int main(int argc, char *argv[])
   int *iptr;
   float *fptr;
   double *dptr;
-  int32_t *iout;
+  int32_t *iout=NULL;
   int verbose, optc, fd, out32, bpf, bits;
   long intotal = 0, outtotal = 0, blen, mlen, check, i, nch, nfid, nsec;
   long dtime;

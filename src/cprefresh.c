@@ -1,5 +1,5 @@
 /*
-cprefresh.c                Copyright frankl 2013-2024
+cprefresh.c                Copyright frankl 2013-2026
 
 This file is part of frankl's stereo utilities.
 See the file License.txt of the distribution and
@@ -12,6 +12,9 @@ Optionally, they use assembler functions on ARM and X86_64.
 #include <string.h>
 #include "cprefresh.h"
 
+#if defined(REFRESHAA64INL) || defined(REFRESHX8664INL)
+/* all functions are inline, see cprefresh_aa64inl.h, cprefresh_x8664inl.h */
+#else
 #ifdef REFRESHVFP
 /* on ARM with some version of the CPU feature 'vfp' */
 void memcp_vfpX(void*, void*, int);
@@ -295,7 +298,4 @@ void cprefresh(char* dest, char* ptr, long n)
 #endif
 #endif
 #endif
-
-
-
-
+#endif

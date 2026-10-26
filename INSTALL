@@ -47,9 +47,13 @@ On ARM aarch64 (e.g., Raspi 4) use assembler code with:
   
 On Odroid C4 (aarch64 with 24 MHz clock) use specific timer with
   make REFRESH=AA64 C4TIMER=-DC4TIMER bin/resample_soxr_convolve_{play,USB}
+And an experimental version with inline assembler
+  make REFRESH=AA64INL C4TIMER=-DC4TIMER 
 
 On X86 with 64 bits use assembler with:
   make REFRESH=X8664
+And experimental with inline assembler
+  make REFRESH=X8664INL
 
 On ARM v7 architecture there are recommended alternative calls which use 
 some assembler code for refreshing or cleaning memory:

@@ -1342,7 +1342,8 @@ int main(int argc, char *argv[])
             k = cblen - cfill;
             if (k > (long)outdone - i)
                 k = outdone - i;
-            memcpy(cblk + 2*cfill, out + 2*i, 2*k*sizeof(double));
+            //memcpy(cblk + 2*cfill, out + 2*i, 2*k*sizeof(double));
+            cprefresh((char*)(cblk + 2*cfill), (char*)(out + 2*i), 2*k*sizeof(double));
             cfill += k;
             if (cfill == cblen) {
                 ct_putblock(ct, cfill);

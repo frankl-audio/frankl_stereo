@@ -2,6 +2,9 @@
 VERSION=0.9.5.dev
 
 REFRESH=""
+# on aarch64: REFRESH=AA64, or REFRESH=AA64INL for the same assembler code
+# inline (src/cprefresh_aa64inl.h), on x86_64: REFRESH=X8664 or
+# REFRESH=X8664INL (src/cprefresh_x8664inl.h); test with "make testinl"
 
 # for resample_soxr_convolve_play/USB on the Odroid C4: make C4TIMER=-DC4TIMER
 # (timing with the 24 MHz system counter; rebuild after "make clean")
@@ -46,11 +49,15 @@ tmp/cprefresh_ass.o: src/cprefresh_default.s src/cprefresh_vfp.s src/cprefresh_a
 	  $(CC) -c $(CFLAGSNO) -marm -mfpu=neon-vfpv4 -o tmp/cprefresh_ass.o src/cprefresh_vfp.s; \
 	elif [ $(REFRESH) = "AA64" ]; then \
 	  $(CC) -c $(CFLAGSNO) -march=native -o tmp/cprefresh_ass.o src/cprefresh_aa64.s; \
+	elif [ $(REFRESH) = "AA64INL" ]; then \
+	  $(CC) -c $(CFLAGSNO) -o tmp/cprefresh_ass.o src/cprefresh_default.s; \
 	elif [ $(REFRESH) = "X8664" ]; then \
 	  $(CC) -c $(CFLAGSNO) -march=native -o tmp/cprefresh_ass.o src/cprefresh_x8664.s; \
+	elif [ $(REFRESH) = "X8664INL" ]; then \
+	  $(CC) -c $(CFLAGSNO) -o tmp/cprefresh_ass.o src/cprefresh_default.s; \
 	fi
 
-tmp/cprefresh.o: src/cprefresh.h src/cprefresh.c |tmp 
+tmp/cprefresh.o: src/cprefresh.h src/cprefresh_aa64inl.h src/cprefresh_x8664inl.h src/cprefresh.c |tmp 
 	$(CC) -c $(CFLAGSNO) -o tmp/cprefresh.o src/cprefresh.c
 
 bin/playhrt: src/version.h tmp/net.o src/playhrt.c tmp/cprefresh.o tmp/cprefresh_ass.o |bin
@@ -170,6 +177,25 @@ bin/music2nf_c4: src/version.h src/nf_io.h src/music2nf_c4.c tmp/cprefresh.o tmp
 	$(CC) $(CFLAGSNO) -o bin/music2nf_c4 src/music2nf_c4.c  tmp/cprefresh.o tmp/cprefresh_ass.o -lsndfile -lrt
 
 c4: bin/by4 bin/myplayhrt_c4 bin/bufhrt_c4 bin/forimprove_c4 bin/music2nf_c4 bin/readlat
+
+# test of REFRESH=AA64INL/X8664INL (compares with cprefresh_aa64.s/_x8664.s)
+ifeq ($(ARCH),x86_64)
+testinl: testinl_x8664
+else
+testinl: testinl_aa64
+endif
+
+testinl_aa64: src/testinl_aa64.c src/cprefresh.h src/cprefresh_aa64inl.h src/cprefresh_aa64.s |bin tmp
+	$(CC) -c -o tmp/testinl_aa64s.o src/cprefresh_aa64.s
+	$(CC) -O2 -Wall -DREFRESHAA64INL -o bin/testinl_aa64 src/testinl_aa64.c tmp/testinl_aa64s.o
+	$(CC) -O0 -Wall -DREFRESHAA64INL -o bin/testinl_aa64_O0 src/testinl_aa64.c tmp/testinl_aa64s.o
+	bin/testinl_aa64 && bin/testinl_aa64_O0
+
+testinl_x8664: src/testinl_x8664.c src/cprefresh.h src/cprefresh_x8664inl.h src/cprefresh_x8664.s |bin tmp
+	$(CC) -c -o tmp/testinl_x8664s.o src/cprefresh_x8664.s
+	$(CC) -O2 -Wall -DREFRESHX8664INL -o bin/testinl_x8664 src/testinl_x8664.c tmp/testinl_x8664s.o
+	$(CC) -O0 -Wall -DREFRESHX8664INL -o bin/testinl_x8664_O0 src/testinl_x8664.c tmp/testinl_x8664s.o
+	bin/testinl_x8664 && bin/testinl_x8664_O0
 
 clean: 
 	rm -rf src/version.h bin tmp

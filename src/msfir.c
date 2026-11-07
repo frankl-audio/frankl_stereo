@@ -36,7 +36,8 @@ void usage( ) {
 "  With input channels L and R and option --Sfilter it computes\n"
 "      M = 0.4 (L + R),   S = 0.8 (L - R),\n"
 "      S' = S convolved with the S filter,\n"
-"      L' = M + S',  R' = M - S'.\n"
+"      M' = M delayed by the value of --m-delay (default 0),\n"
+"      L' = M' + S',  R' = M' - S'.\n"
 "  Without --Sfilter we just have L' = L and R' = R.\n"
 "  With option --LRfilters the output is L' convolved with the L filter\n"
 "  as left channel and R' convolved with the R filter as right channel,\n"
@@ -72,6 +73,15 @@ void usage( ) {
 "  --s-factor=floatval, -s floatval\n"
 "      the factor in the definition of S (only used with --Sfilter).\n"
 "      Default is 0.8.\n"
+"\n"
+"  --m-delay=intval, -d intval\n"
+"      delay the M channel by this number of frames (only used with\n"
+"      --Sfilter). Default is 0, this is the right value for a minimum\n"
+"      phase S filter. For a symmetric (linear phase) S filter with an\n"
+"      odd number N of taps use (N-1)/2. With an even N the delay of the\n"
+"      filter is not a whole number of frames and cannot be matched.\n"
+"      Without --tail the output has the length of the input, so its\n"
+"      last frames are missing the delayed signal.\n"
 "\n"
 "  --wisdom-file=fname, -w fname\n"
 "      file to store FFTW wisdom (optimized plans for the FFTs). It is\n"
@@ -131,7 +141,7 @@ static void writeframes(double *buf, long n)
 int main(int argc, char *argv[])
 {
   int optc, optidx, blen, verbose, tail, by4, out32;
-  long nin, nout, rest, total, written, k;
+  long nin, nout, rest, total, written, k, mdelay;
   char *wisdom, *sfilt, *lfilt, *rfilt;
   double mfac, sfac, *buf;
   int32_t *obuf;
@@ -145,6 +155,7 @@ int main(int argc, char *argv[])
   blen = 16384;
   mfac = 0.4;
   sfac = 0.8;
+  mdelay = 0;
   tail = 0;
   by4 = 0;
   out32 = 0;
@@ -160,6 +171,7 @@ int main(int argc, char *argv[])
     {"block-length", required_argument, 0, 'b' },
     {"m-factor", required_argument, 0, 'm' },
     {"s-factor", required_argument, 0, 's' },
+    {"m-delay", required_argument, 0, 'd' },
     {"wisdom-file", required_argument, 0, 'w' },
     {"by4int32", no_argument, 0, '4' },
     {"toint32", no_argument, 0, 'I' },
@@ -169,7 +181,7 @@ int main(int argc, char *argv[])
     {"help", no_argument, 0, 'h' },
     {0,         0,                 0,  0 }
   };
-  while ((optc = getopt_long(argc, argv, "S:L:b:m:s:w:4ItpVh",
+  while ((optc = getopt_long(argc, argv, "S:L:b:m:s:d:w:4ItpVh",
           longoptions, &optidx)) != -1) {
     switch (optc) {
     case 'S':
@@ -192,6 +204,9 @@ int main(int argc, char *argv[])
       break;
     case 's':
       sfac = atof(optarg);
+      break;
+    case 'd':
+      mdelay = atol(optarg);
       break;
     case 'w':
       wisdom = optarg;
@@ -229,7 +244,7 @@ int main(int argc, char *argv[])
 
   if (wisdom && !fftconv_loadwisdom(wisdom) && verbose)
     fprintf(stderr, "msfir: no wisdom read from %s\n", wisdom);
-  ms = msconv_new(sfilt, lfilt, rfilt, blen, mfac, sfac, verbose);
+  ms = msconv_new(sfilt, lfilt, rfilt, blen, mfac, sfac, mdelay, verbose);
   if (wisdom)
     fftconv_savewisdom(wisdom);
 

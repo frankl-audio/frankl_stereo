@@ -11,11 +11,12 @@ http://www.gnu.org/licenses/gpl.txt for license details.
    - optional M/S processing with input L, R:
         M = mfac (L + R),  S = sfac (L - R),
         S' = S convolved with S filter,
-        L' = M + S',  R' = M - S'
+        M' = M delayed by mdelay frames,
+        L' = M' + S',  R' = M' - S'
      (without S filter: L' = L, R' = R)
    - optional L'' = L' convolved with L filter, R'' = R' convolved with
      R filter (without L/R filters: L'' = L', R'' = R')
-   There is no added delay, see fftconv.h.                            */
+   Apart from mdelay there is no added delay, see fftconv.h.          */
 
 #ifndef MSCONV_H
 #define MSCONV_H
@@ -26,10 +27,12 @@ typedef struct msconv msconv;
 
 /* sfilt: file with S filter or NULL, lfilt, rfilt: files with L and R
    filters or both NULL; files contain raw FLOAT64_LE coefficients.
+   mdelay >= 0 is only used with an S filter.
    Call fftconv_loadwisdom before and fftconv_savewisdom after this,
    if wanted. With verbose some information is shown on stderr.     */
 msconv *msconv_new(const char *sfilt, const char *lfilt, const char *rfilt,
-                   int blen, double mfac, double sfac, int verbose);
+                   int blen, double mfac, double sfac, long mdelay,
+                   int verbose);
 
 /* process next block of blen frames in place */
 void msconv_process(msconv *ms, double *buf);

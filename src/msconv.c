@@ -10,6 +10,7 @@ http://www.gnu.org/licenses/gpl.txt for license details.
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "fftconv.h"
 #include "msconv.h"
 
@@ -19,6 +20,8 @@ struct msconv {
   fftconv *cs, *cl, *cr;   /* NULL if not used */
   long tail;
   double *m, *s, *l, *r;   /* single channel buffers of length blen */
+  double *mdl;             /* delay line for M, NULL if not used */
+  long mdelay, mdpos;
 };
 
 static fftconv *newconv(const char *fname, int blen, long *len,
@@ -37,11 +40,16 @@ static fftconv *newconv(const char *fname, int blen, long *len,
 }
 
 msconv *msconv_new(const char *sfilt, const char *lfilt, const char *rfilt,
-                   int blen, double mfac, double sfac, int verbose)
+                   int blen, double mfac, double sfac, long mdelay,
+                   int verbose)
 {
   msconv *ms;
   long slen, llen, rlen;
 
+  if (mdelay < 0) {
+    fprintf(stderr, "msconv: delay of M channel must not be negative.\n");
+    exit(1);
+  }
   ms = calloc(1, sizeof(msconv));
   if (!ms) {
     fprintf(stderr, "msconv: out of memory.\n");
@@ -54,9 +62,19 @@ msconv *msconv_new(const char *sfilt, const char *lfilt, const char *rfilt,
     fprintf(stderr, "msconv: block length %d\n", blen);
   if (sfilt) {
     ms->cs = newconv(sfilt, blen, &slen, "S", verbose);
-    ms->tail += slen - 1;
+    ms->tail += (slen - 1 > mdelay ? slen - 1 : mdelay);
     if (verbose)
-      fprintf(stderr, "msconv: M factor %g, S factor %g\n", mfac, sfac);
+      fprintf(stderr, "msconv: M factor %g, S factor %g, M delay %ld\n",
+              mfac, sfac, mdelay);
+    if (mdelay > 0) {
+      ms->mdelay = mdelay;
+      ms->mdl = malloc(mdelay * sizeof(double));
+      if (!ms->mdl) {
+        fprintf(stderr, "msconv: out of memory.\n");
+        exit(3);
+      }
+      memset(ms->mdl, 0, mdelay * sizeof(double));
+    }
   }
   if (lfilt && rfilt) {
     ms->cl = newconv(lfilt, blen, &llen, "L", verbose);
@@ -77,7 +95,9 @@ msconv *msconv_new(const char *sfilt, const char *lfilt, const char *rfilt,
 void msconv_process(msconv *ms, double *buf)
 {
   int i, blen = ms->blen;
-  double *m = ms->m, *s = ms->s, *l = ms->l, *r = ms->r;
+  double *m = ms->m, *s = ms->s, *l = ms->l, *r = ms->r, *mdl = ms->mdl;
+  long mdpos = ms->mdpos;
+  double x;
 
   if (ms->cs) {
     for (i = 0; i < blen; i++) {
@@ -85,6 +105,16 @@ void msconv_process(msconv *ms, double *buf)
       s[i] = ms->sfac * (buf[2*i] - buf[2*i+1]);
     }
     fftconv_process(ms->cs, s, s);
+    if (mdl) {
+      for (i = 0; i < blen; i++) {
+        x = mdl[mdpos];
+        mdl[mdpos] = m[i];
+        m[i] = x;
+        if (++mdpos == ms->mdelay)
+          mdpos = 0;
+      }
+      ms->mdpos = mdpos;
+    }
     for (i = 0; i < blen; i++) {
       l[i] = m[i] + s[i];
       r[i] = m[i] - s[i];
@@ -143,6 +173,6 @@ void msconv_free(msconv *ms)
     fftconv_free(ms->cl);
     fftconv_free(ms->cr);
   }
-  free(ms->m); free(ms->s); free(ms->l); free(ms->r);
+  free(ms->m); free(ms->s); free(ms->l); free(ms->r); free(ms->mdl);
   free(ms);
 }

@@ -258,6 +258,11 @@ void usage( ) {
 "      the factors in the definitions of M and S. Defaults are 0.4 and\n"
 "      0.8.\n"
 "\n"
+"  --m-delay=intval\n"
+"      delay the M channel by this number of frames, for use with a\n"
+"      linear phase S filter with an odd number N of taps: (N-1)/2.\n"
+"      Default is 0, see 'msfir --help'.\n"
+"\n"
 "  --conv-block-length=intval\n"
 "      the block length for the convolution. Default is 16384.\n"
 "\n"
@@ -631,6 +636,7 @@ int main(int argc, char *argv[])
   /* variables for optional convolution in second thread */
   char *sfilt, *lfilt, *rfilt, *wisdom, *cpus;
   double mfac, sfac, *cblk;
+  long mdelay;
   int cblen, by4, tail, rcpu, ccpu, pcpu;
   long cfill, k, rest;
   struct convthread *ct;
@@ -682,6 +688,7 @@ int main(int argc, char *argv[])
       {"LRfilters", required_argument, 0, 'L' },
       {"m-factor", required_argument, 0, 1001 },
       {"s-factor", required_argument, 0, 1002 },
+      {"m-delay", required_argument, 0, 1022 },
       {"conv-block-length", required_argument, 0, 1003 },
       {"wisdom-file", required_argument, 0, 'w' },
       {"by4int32", no_argument, 0, '4' },
@@ -739,6 +746,7 @@ int main(int argc, char *argv[])
   cpus = NULL;
   mfac = 0.4;
   sfac = 0.8;
+  mdelay = 0;
   cblen = 16384;
   by4 = 0;
   tail = 0;
@@ -864,6 +872,9 @@ int main(int argc, char *argv[])
         break;
       case 1002:
         sfac = atof(optarg);
+        break;
+      case 1022:
+        mdelay = atol(optarg);
         break;
       case 1003:
         cblen = atoi(optarg);
@@ -1111,7 +1122,7 @@ int main(int argc, char *argv[])
       }
       if (wisdom && !fftconv_loadwisdom(wisdom) && verbose)
           fprintf(stderr, "resample_soxr_convolve_USB: no wisdom read from %s\n", wisdom);
-      ct->ms = msconv_new(sfilt, lfilt, rfilt, cblen, mfac, sfac, verbose);
+      ct->ms = msconv_new(sfilt, lfilt, rfilt, cblen, mfac, sfac, mdelay, verbose);
       if (wisdom)
           fftconv_savewisdom(wisdom);
       ct->blen = cblen;

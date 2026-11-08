@@ -2,6 +2,20 @@
 
 0.9.4 to 0.9.5
 
+- new option --m-delay for the msfir and the player programs which have a
+  convolver step. Allows to use more precise linear phase filters for
+  LoCo.
+
+- the convolver programs have a --tail option such that the full input file
+  is filtered (the output may be a bit longer than the input).
+
+- private *_c4 files of the author are no longer needed, the more precise
+  timing on an Odroid C4 for some programs can now be achieved by 
+  'make C4TIMER=-DC4TIMER ....' on the C4.
+
+- some cleanup of the code, ancient compile options -z execstack and 
+  -fgnu89-inline are gone.
+
 - new options --direct-read --read-buffer --periodic-read for 
   resample_soxr and its combined variants. Reads input files with
   O_DIRECT into small buffer, avoiding various caches of the system.
